@@ -3,8 +3,8 @@ import { useAuth } from '../../lib/AuthContext'
 import { supabase } from '../../lib/supabase'
 
 function getToday() { return new Date().toISOString().split('T')[0] }
-function getYesterday() {
-  const d = new Date(); d.setDate(d.getDate() - 1)
+function getYesterday(fromDate) {
+  const d = new Date(fromDate + 'T00:00:00'); d.setDate(d.getDate() - 1)
   return d.toISOString().split('T')[0]
 }
 function fmt(d) {
@@ -16,6 +16,7 @@ function fmt(d) {
 export default function DeliveryView({ standalone }) {
   const { signOut } = useAuth()
   const [screen, setScreen] = useState('start') // start | loading | delivery | customer
+  const [selectedDate, setSelectedDate] = useState(getToday())
   const [orders, setOrders] = useState([])
   const [customers, setCustomers] = useState([])
   const [loading, setLoading] = useState(true)
@@ -29,16 +30,16 @@ export default function DeliveryView({ standalone }) {
   const [deliveredCustomers, setDeliveredCustomers] = useState({}) // customerId -> bool
   const [cashSaved, setCashSaved] = useState({}) // customerId -> bool
   const today = getToday()
-  const yesterday = getYesterday()
+  const yesterday = getYesterday(selectedDate)
 
-  useEffect(() => { fetchData() }, [])
+  useEffect(() => { fetchData() }, [selectedDate])
 
   async function fetchData() {
     setLoading(true)
     const [{ data: o }, { data: c }] = await Promise.all([
       supabase.from('orders')
         .select('*, customers(id, name, type, payment_days, route_order, phone), order_items(*, bakery_items(name, unit, category))')
-        .eq('delivery_date', today)
+        .eq('delivery_date', selectedDate)
         .in('status', ['bake_completed', 'delivered'])
         .order('created_at'),
       supabase.from('customers').select('*').eq('is_active', true).order('route_order').order('name')
@@ -173,7 +174,7 @@ export default function DeliveryView({ standalone }) {
 
     const { data: payment, error } = await supabase.from('payments').insert({
       customer_id: selectedCustomer.id,
-      payment_date: today,
+      payment_date: selectedDate,
       amount,
       notes: `Cash collected on delivery — Order ${order?.id?.slice(0, 8)}`
     }).select().single()
@@ -214,7 +215,7 @@ export default function DeliveryView({ standalone }) {
         <span className="text-xl">🚚</span>
         <div>
           <h1 className="text-sm font-semibold text-blue-900">Delivery</h1>
-          <p className="text-xs text-blue-500">{fmt(today)}</p>
+          <p className="text-xs text-blue-500">{fmt(selectedDate)}</p>
         </div>
       </div>
       <button onClick={signOut} className="text-sm text-blue-500 hover:text-blue-800">Sign out</button>
@@ -233,17 +234,29 @@ export default function DeliveryView({ standalone }) {
     <div className={standalone ? 'min-h-screen bg-blue-50' : ''}>
       {header}
       <div className="max-w-md mx-auto px-4 py-10">
-        <div className="bg-white rounded-2xl border border-blue-100 p-6 text-center">
-          <div className="text-5xl mb-4">🚚</div>
-          <h2 className="text-lg font-semibold text-gray-800 mb-1">Ready for delivery?</h2>
-          <p className="text-sm text-gray-400 mb-6">{orders.length} orders for {fmt(today)}</p>
-          {orders.length === 0 ? (
-            <p className="text-amber-600 text-sm">No baked orders found for today's delivery.</p>
+        <div className="bg-white rounded-2xl border border-blue-100 p-6">
+          <div className="text-center mb-5">
+            <div className="text-5xl mb-3">🚚</div>
+            <h2 className="text-lg font-semibold text-gray-800 mb-1">Ready for delivery?</h2>
+          </div>
+          <div className="mb-5">
+            <label className="text-xs font-medium text-gray-500 mb-1 block">Delivery Date</label>
+            <input type="date" value={selectedDate}
+              onChange={e => { setSelectedDate(e.target.value); fetchData() }}
+              className="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" />
+          </div>
+          {loading ? (
+            <p className="text-center text-blue-500 text-sm">Loading...</p>
+          ) : orders.length === 0 ? (
+            <p className="text-center text-amber-600 text-sm">No baked orders found for {fmt(selectedDate)}.</p>
           ) : (
-            <button onClick={() => setScreen('loading')}
-              className="w-full py-4 rounded-2xl bg-blue-600 text-white font-semibold text-base hover:bg-blue-700 transition-colors">
-              🏁 Start Loading Operations
-            </button>
+            <>
+              <p className="text-center text-sm text-gray-400 mb-4">{orders.length} orders for {fmt(selectedDate)}</p>
+              <button onClick={() => setScreen('loading')}
+                className="w-full py-4 rounded-2xl bg-blue-600 text-white font-semibold text-base hover:bg-blue-700 transition-colors">
+                🏁 Start Loading Operations
+              </button>
+            </>
           )}
         </div>
       </div>
@@ -338,7 +351,7 @@ export default function DeliveryView({ standalone }) {
             <p className="text-sm text-blue-600 mt-0.5">{deliveredCount} of {routeCustomers.length} delivered</p>
           </div>
           <div className="text-right">
-            <div className="text-xs text-gray-400">{fmt(today)}</div>
+            <div className="text-xs text-gray-400">{fmt(selectedDate)}</div>
             {deliveredCount === routeCustomers.length && routeCustomers.length > 0 && (
               <span className="text-xs text-green-600 font-semibold">All delivered! 🎉</span>
             )}
