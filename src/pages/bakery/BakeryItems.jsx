@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 
-const CATEGORIES = ['Bread', 'Pastry', 'Cake', 'Cookie', 'Muffin', 'Tart', 'Other']
+const CATEGORIES = ['Bread', 'Pastry', 'Dry Cake', 'Wet Cake', 'Cookie', 'Pie', 'Other']
 const UNITS = ['piece', 'loaf', 'dozen', 'slice', 'roll', 'tray']
 
 const empty = { name: '', category: 'Bread', unit: 'piece', selling_price: '', is_active: true }
