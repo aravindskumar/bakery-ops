@@ -96,6 +96,14 @@ export default function Ledger() {
 
   async function generateInvoice() {
     if (!selectedCustomer) return
+
+    // Block invoice for 0 and 1 day payment term customers
+    const payDays = selectedCustomer.payment_days || 0
+    if (payDays === 0 || payDays === 1) {
+      alert(`Invoices are not generated for customers with ${payDays === 0 ? 'Cash on Delivery' : '1 day'} payment terms. Cash is collected directly on delivery.`)
+      return
+    }
+
     const uninvoiced = orders.filter(o => !o.invoice_id && o.status === 'delivered')
     if (uninvoiced.length === 0) return alert('No uninvoiced delivered orders for this customer.')
     if (!confirm(`Generate invoice for ${uninvoiced.length} order(s)?`)) return
@@ -105,20 +113,54 @@ export default function Ledger() {
     const today = new Date().toISOString().split('T')[0]
     const invNumber = invoiceNumber(selectedCustomer.name, today)
 
+    // Check for existing unallocated payments from delivery runs
+    const { data: existingPayments } = await supabase
+      .from('payments')
+      .select('*, payment_allocations(allocated_amount)')
+      .eq('customer_id', selectedCustomer.id)
+      .order('payment_date', { ascending: true })
+
+    // Calculate total unallocated amount
+    let unallocated = 0
+    for (const pay of (existingPayments || [])) {
+      const allocated = pay.payment_allocations?.reduce((s, a) => s + parseFloat(a.allocated_amount || 0), 0) || 0
+      unallocated += Math.max(0, parseFloat(pay.amount) - allocated)
+    }
+
+    const paidAmount = Math.min(unallocated, total)
+    const status = paidAmount >= total ? 'paid' : paidAmount > 0 ? 'part_paid' : 'unpaid'
+
     const { data: inv, error } = await supabase.from('invoices').insert({
       invoice_number: invNumber,
       customer_id: selectedCustomer.id,
       invoice_date: today,
       total_amount: total,
-      paid_amount: 0,
-      status: 'unpaid'
+      paid_amount: paidAmount,
+      status
     }).select().single()
 
     if (error) { alert('Error: ' + error.message); setGenerating(false); return }
 
+    // Link orders to invoice
     await supabase.from('orders')
       .update({ invoice_id: inv.id, invoiced_at: new Date().toISOString() })
       .in('id', uninvoiced.map(o => o.id))
+
+    // Allocate existing unallocated payments to this invoice
+    let remaining = paidAmount
+    for (const pay of (existingPayments || [])) {
+      if (remaining <= 0) break
+      const allocated = pay.payment_allocations?.reduce((s, a) => s + parseFloat(a.allocated_amount || 0), 0) || 0
+      const available = Math.max(0, parseFloat(pay.amount) - allocated)
+      if (available <= 0) continue
+      const allocate = Math.min(remaining, available)
+      await supabase.from('payment_allocations').insert({
+        payment_id: pay.id,
+        invoice_id: inv.id,
+        allocated_amount: allocate
+      })
+      remaining -= allocate
+    }
 
     await refreshCustomerData()
     setGenerating(false)
@@ -345,10 +387,16 @@ export default function Ledger() {
 
             {/* Action buttons */}
             <div className="flex gap-3">
-              <button onClick={generateInvoice} disabled={generating || uninvoicedOrders.length === 0}
-                className="flex-1 py-2.5 rounded-xl bg-amber-800 text-white text-sm font-medium hover:bg-amber-700 disabled:opacity-40 transition-colors">
-                {generating ? 'Generating...' : `🧾 Generate Invoice${uninvoicedOrders.length > 0 ? ` (${uninvoicedOrders.length} orders · ₹${uninvoicedTotal.toFixed(2)})` : ' — nothing to invoice'}`}
-              </button>
+              {(selectedCustomer.payment_days || 0) <= 1 ? (
+                <div className="flex-1 py-2.5 rounded-xl bg-gray-100 text-gray-400 text-sm text-center">
+                  No invoicing — {(selectedCustomer.payment_days || 0) === 0 ? 'Cash on Delivery' : '1 day terms'}
+                </div>
+              ) : (
+                <button onClick={generateInvoice} disabled={generating || uninvoicedOrders.length === 0}
+                  className="flex-1 py-2.5 rounded-xl bg-amber-800 text-white text-sm font-medium hover:bg-amber-700 disabled:opacity-40 transition-colors">
+                  {generating ? 'Generating...' : `🧾 Generate Invoice${uninvoicedOrders.length > 0 ? ` (${uninvoicedOrders.length} orders · ₹${uninvoicedTotal.toFixed(2)})` : ' — nothing to invoice'}`}
+                </button>
+              )}
               <button onClick={() => setShowPaymentForm(true)}
                 className="flex-1 py-2.5 rounded-xl bg-green-600 text-white text-sm font-medium hover:bg-green-700 transition-colors">
                 💰 Record Payment
