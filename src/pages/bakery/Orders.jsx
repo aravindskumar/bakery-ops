@@ -50,6 +50,7 @@ export default function Orders() {
   const [editingOrder, setEditingOrder] = useState(null)
   const [advancing, setAdvancing] = useState(null)
   const [startingBake, setStartingBake] = useState(false)
+  const [showFutureCustomerPicker, setShowFutureCustomerPicker] = useState(false)
 
   useEffect(() => { fetchAll() }, [orderDate])
 
@@ -318,25 +319,21 @@ export default function Orders() {
             </div>
           )}
 
-          {/* Future special orders button */}
+          {/* Future special orders */}
           {!bakingStarted && (
             <div className="bg-white rounded-2xl border border-purple-100 p-4">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between mb-3">
                 <div>
                   <p className="text-xs font-semibold text-purple-700 uppercase tracking-wide">Future Special Orders</p>
                   <p className="text-xs text-gray-400 mt-0.5">Birthday cakes, special occasions, advance orders</p>
                 </div>
-                <div className="flex items-center gap-2">
-                  <select
-                    onChange={e => { if (e.target.value) { const c = customers.find(c => c.id === e.target.value); if (c) openNewOrder(c, true); e.target.value = '' } }}
-                    className="px-3 py-2 rounded-xl border border-purple-200 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 bg-white text-purple-800">
-                    <option value="">+ Add future order...</option>
-                    {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                  </select>
-                </div>
+                <button onClick={() => { setShowFutureCustomerPicker(true) }}
+                  className="px-4 py-2 rounded-xl bg-purple-600 text-white text-sm font-semibold hover:bg-purple-700 transition-colors">
+                  + Future Order
+                </button>
               </div>
               {futureOrders.length > 0 && (
-                <div className="mt-3 space-y-2">
+                <div className="space-y-2">
                   {futureOrders.map(order => (
                     <div key={order.id} className="flex items-center justify-between bg-purple-50 rounded-xl px-3 py-2">
                       <div>
@@ -352,6 +349,27 @@ export default function Orders() {
                   ))}
                 </div>
               )}
+            </div>
+          )}
+
+          {/* Customer picker for future orders */}
+          {showFutureCustomerPicker && (
+            <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 px-4">
+              <div className="bg-white rounded-2xl w-full max-w-sm p-6 shadow-xl">
+                <h3 className="font-semibold text-gray-800 mb-4">Select Customer for Future Order</h3>
+                <div className="space-y-2 max-h-80 overflow-y-auto">
+                  {customers.map(c => (
+                    <button key={c.id} onClick={() => { setShowFutureCustomerPicker(false); openNewOrder(c, true) }}
+                      className="w-full text-left px-4 py-3 rounded-xl border border-gray-100 hover:bg-purple-50 hover:border-purple-200 transition-colors text-sm text-gray-700">
+                      {c.name}
+                    </button>
+                  ))}
+                </div>
+                <button onClick={() => setShowFutureCustomerPicker(false)}
+                  className="w-full mt-4 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-500 hover:bg-gray-50">
+                  Cancel
+                </button>
+              </div>
             </div>
           )}
 
