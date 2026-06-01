@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '../../lib/AuthContext'
 import { supabase } from '../../lib/supabase'
+import { useBackButton } from '../../lib/useBackButton'
 
 function getToday() { return new Date().toISOString().split('T')[0] }
 function getYesterday(fromDate) {
@@ -32,7 +33,22 @@ export default function DeliveryView({ standalone }) {
   const today = getToday()
   const yesterday = getYesterday(selectedDate)
 
-  useEffect(() => { fetchData(selectedDate) }, [selectedDate])
+  // Handle browser back button / swipe-back for all screens
+  useEffect(() => {
+    if (screen === 'start') return // nothing to go back to
+
+    // Push state when entering a new screen
+    window.history.pushState({ screen }, '')
+
+    function handlePopState() {
+      if (screen === 'customer') setScreen('delivery')
+      else if (screen === 'delivery') setScreen('start')
+      else if (screen === 'loading') setScreen('start')
+    }
+
+    window.addEventListener('popstate', handlePopState)
+    return () => window.removeEventListener('popstate', handlePopState)
+  }, [screen])
 
   async function fetchData(date) {
     const fetchDate = date || getToday()

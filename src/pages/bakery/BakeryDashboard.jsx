@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useAuth } from '../../lib/AuthContext'
 import BakeryItems from './BakeryItems'
 import Ingredients from './Ingredients'
@@ -28,6 +28,15 @@ export default function BakeryDashboard() {
   const { signOut } = useAuth()
   const [activeTab, setActiveTab] = useState('orders')
   const [drawerOpen, setDrawerOpen] = useState(false)
+
+  // Close drawer on back button press
+  useEffect(() => {
+    if (!drawerOpen) return
+    window.history.pushState({ drawer: true }, '')
+    function handlePopState() { setDrawerOpen(false) }
+    window.addEventListener('popstate', handlePopState)
+    return () => window.removeEventListener('popstate', handlePopState)
+  }, [drawerOpen])
 
   function selectTab(id) {
     setActiveTab(id)
