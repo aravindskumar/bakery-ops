@@ -30,6 +30,7 @@ export default function BakerView({ standalone }) {
       .select('*, order_items(*, bakery_items(id, name, unit, category))')
       .eq('order_date', today)
       .eq('status', 'sent_to_baker')
+      .not('baking_started_at', 'is', null)
 
     if (error) { console.error(error); setLoading(false); return }
 
