@@ -357,8 +357,7 @@ export default function DeliveryView({ standalone }) {
             {deliveredCount === routeCustomers.length && routeCustomers.length > 0 && (
               <span className="text-xs text-green-600 font-semibold">All delivered! 🎉</span>
             )}
-          </div>
-        </div>
+          </div>        </div>
 
         <div className="bg-white rounded-2xl border border-blue-100 overflow-hidden">
           {routeCustomers.map((customer, i) => {
@@ -389,11 +388,22 @@ export default function DeliveryView({ standalone }) {
             )
           })}
         </div>
+
+        {/* End of Delivery button */}
+        {deliveredCount === routeCustomers.length && routeCustomers.length > 0 && (
+          <div className="mt-4 bg-green-50 border border-green-100 rounded-2xl p-5 text-center">
+            <div className="text-3xl mb-2">🎉</div>
+            <p className="font-semibold text-green-800 mb-1">All {deliveredCount} deliveries done!</p>
+            <p className="text-sm text-green-600 mb-4">Great work today.</p>
+            <button onClick={() => setScreen('start')}
+              className="w-full py-3 rounded-xl bg-green-600 text-white font-semibold hover:bg-green-700 transition-colors">
+              🏁 End of Delivery Run
+            </button>
+          </div>
+        )}
       </div>
     </div>
   )
-
-  // CUSTOMER DELIVERY SCREEN
   if (screen === 'customer' && selectedCustomer && selectedOrder) return (
     <div className={standalone ? 'min-h-screen bg-blue-50' : ''}>
       {header}
@@ -447,60 +457,61 @@ export default function DeliveryView({ standalone }) {
           </button>
         )}
 
-        {/* Cash collection — shown after delivery */}
-        {isDelivered && (
-          <div className="bg-white rounded-2xl border border-green-100 p-4">
+        {/* Cash collection — only for 0 and 1 day payment terms */}
+        {isDelivered && (selectedCustomer.payment_days === 0 || selectedCustomer.payment_days === 1) && (
+          <div className="bg-white rounded-2xl border border-green-100 p-4 mb-4">
             <div className="flex items-center gap-2 mb-3">
               <span className="text-green-500 text-lg">✓</span>
               <span className="font-semibold text-green-800">Delivered</span>
             </div>
 
             {cashSaved[selectedCustomer.id] ? (
-              <div className="bg-green-50 rounded-xl px-4 py-3 text-sm text-green-700 font-medium text-center">
-                ✓ Cash ₹{cashAmount} recorded
+              <div className="bg-green-50 rounded-xl px-4 py-3 text-center mb-3">
+                <p className="text-xs text-green-600 mb-0.5">Cash collected</p>
+                <p className="text-xl font-bold text-green-700">₹{cashAmount}</p>
               </div>
             ) : (
               <>
-                <p className="text-xs text-gray-500 mb-3">
-                  {selectedCustomer.payment_days === 0
-                    ? 'Cash on delivery — amount auto-filled'
-                    : selectedCustomer.payment_days === 1
-                      ? 'Collect payment for yesterday\'s order'
-                      : `Payment terms: ${selectedCustomer.payment_days} days — enter amount collected`}
-                </p>
-                <div className="flex gap-3">
+                <div className="bg-amber-50 rounded-xl px-4 py-3 text-center mb-4">
+                  <p className="text-xs text-amber-600 mb-0.5">
+                    {selectedCustomer.payment_days === 0 ? 'Amount to collect today' : "Amount to collect (yesterday's order)"}
+                  </p>
+                  <p className="text-2xl font-bold text-amber-800">₹{cashAmount || '0.00'}</p>
+                </div>
+                <div className="flex gap-3 mb-3">
                   <div className="flex-1">
-                    <label className="text-xs text-gray-400 mb-1 block">Cash collected (₹)</label>
+                    <label className="text-xs text-gray-400 mb-1 block">Edit amount if different (₹)</label>
                     <input type="number" step="0.01" value={cashAmount}
                       onChange={e => setCashAmount(e.target.value)}
-                      placeholder={selectedCustomer.payment_days > 1 ? 'Enter amount' : ''}
                       className="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-green-400" />
                   </div>
                   <button onClick={saveCash} disabled={!cashAmount || parseFloat(cashAmount) <= 0}
-                    className="self-end px-4 py-2.5 rounded-xl bg-green-600 text-white text-sm font-semibold hover:bg-green-700 disabled:opacity-40 transition-colors">
+                    className="self-end px-5 py-2.5 rounded-xl bg-green-600 text-white text-sm font-semibold hover:bg-green-700 disabled:opacity-40 transition-colors">
                     Save
                   </button>
                 </div>
-                <button onClick={() => setScreen('delivery')} className="w-full mt-3 py-2 text-sm text-gray-400 hover:text-gray-600">
-                  Skip — no cash today
+                <button onClick={() => setScreen('delivery')}
+                  className="w-full py-3 rounded-xl bg-gray-100 text-gray-600 text-sm font-semibold hover:bg-gray-200 transition-colors">
+                  Skip — No Cash Today
                 </button>
               </>
             )}
 
             {cashSaved[selectedCustomer.id] && (
-              <button onClick={() => setScreen('delivery')} className="w-full mt-3 py-2.5 rounded-xl bg-blue-50 text-blue-700 text-sm font-semibold hover:bg-blue-100">
-                ← Back to Route
+              <button onClick={() => setScreen('delivery')}
+                className="w-full mt-3 py-3 rounded-xl bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 transition-colors">
+                ← Back to Delivery Route
               </button>
             )}
           </div>
         )}
 
-        {isDelivered && !cashSaved[selectedCustomer.id] && (
-          <div className="mt-2 text-center">
-            <button onClick={() => setScreen('delivery')} className="text-sm text-gray-400 hover:text-gray-600 underline underline-offset-2">
-              Back to route
-            </button>
-          </div>
+        {/* Back to route for non-cash customers or after cash saved */}
+        {isDelivered && (selectedCustomer.payment_days > 1 || cashSaved[selectedCustomer.id]) && (
+          <button onClick={() => setScreen('delivery')}
+            className="w-full py-3 rounded-xl bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 transition-colors mb-4">
+            ← Back to Delivery Route
+          </button>
         )}
       </div>
     </div>
