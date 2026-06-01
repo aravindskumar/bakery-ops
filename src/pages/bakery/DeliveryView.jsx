@@ -35,11 +35,11 @@ export default function DeliveryView({ standalone }) {
   useEffect(() => { fetchData(selectedDate) }, [selectedDate])
 
   async function fetchData(date) {
-    const fetchDate = date || selectedDate
+    const fetchDate = date || getToday()
     setLoading(true)
     const [{ data: o }, { data: c }] = await Promise.all([
       supabase.from('orders')
-        .select('*, customers(id, name, type, payment_days, route_order, phone), order_items(*, bakery_items(name, unit, category))')
+        .select('*, customers(*), order_items(*, bakery_items(name, unit, category))')
         .eq('delivery_date', fetchDate)
         .in('status', ['bake_completed', 'delivered'])
         .order('created_at'),
