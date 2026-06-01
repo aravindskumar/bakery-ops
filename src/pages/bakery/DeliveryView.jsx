@@ -285,60 +285,55 @@ export default function DeliveryView({ standalone }) {
           </div>
         </div>
 
-        <div className="bg-white rounded-2xl border border-blue-100 overflow-hidden mb-4">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="bg-blue-50 text-blue-700 text-xs uppercase tracking-wide">
-                <th className="text-left px-4 py-3 font-medium">Item</th>
-                <th className="text-center px-3 py-3 font-medium">To Load</th>
-                <th className="text-center px-3 py-3 font-medium">Loaded</th>
-                <th className="px-4 py-3"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {loadingRows.map((row, i) => {
-                const totalLoaded = row.items.reduce((s, oi) => s + (parseInt(loadedQtys[oi.id]) || 0), 0)
-                const isLoaded = row.items.every(oi => loadedItems[oi.id])
-                return (
-                  <tr key={i} className={`border-t border-blue-50 ${isLoaded ? 'bg-green-50/40' : ''}`}>
-                    <td className="px-4 py-3 text-gray-800">
-                      {row.name}
-                      {isLoaded && <span className="ml-2 text-green-500 text-xs">✓</span>}
-                    </td>
-                    <td className="px-3 py-3 text-center font-semibold text-gray-700">{row.totalOrdered}</td>
-                    <td className="px-3 py-3 text-center">
-                      {isLoaded ? (
-                        <span className="text-green-700 font-semibold">{totalLoaded}</span>
-                      ) : (
-                        <input type="number" min="0"
-                          value={row.items.reduce((s, oi) => s + (parseInt(loadedQtys[oi.id]) || 0), 0)}
-                          onChange={e => {
-                            const val = parseInt(e.target.value) || 0
-                            const newQtys = { ...loadedQtys }
-                            // Distribute across items proportionally (simple: assign to first item)
-                            row.items.forEach((oi, idx) => {
-                              newQtys[oi.id] = idx === 0 ? val : (loadedQtys[oi.id] || 0)
-                            })
-                            setLoadedQtys(newQtys)
-                          }}
-                          className="w-16 text-center px-2 py-1.5 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" />
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      {!isLoaded && (
-                        <button onClick={() => confirmLoaded(row)}
-                          className="px-3 py-1.5 rounded-lg bg-blue-600 text-white text-xs font-semibold hover:bg-blue-700">
-                          Loaded
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </div>
+        <div className="space-y-3 mb-4">
+          {loadingRows.map((row, i) => {
+            const totalLoaded = row.items.reduce((s, oi) => s + (parseInt(loadedQtys[oi.id]) || 0), 0)
+            const isLoaded = row.items.every(oi => loadedItems[oi.id])
+            const isShort = totalLoaded < row.totalOrdered
 
+            function updateTotal(newVal) {
+              const val = Math.max(0, newVal)
+              const newQtys = { ...loadedQtys }
+              row.items.forEach((oi, idx) => { newQtys[oi.id] = idx === 0 ? val : 0 })
+              setLoadedQtys(newQtys)
+            }
+
+            return (
+              <div key={i} className={`bg-white rounded-2xl border px-4 py-4 ${isLoaded ? 'border-green-200 bg-green-50/30' : 'border-blue-100'}`}>
+                <div className="flex items-center justify-between mb-3">
+                  <div>
+                    <span className="font-semibold text-gray-800">{row.name}</span>
+                    {isLoaded && <span className="ml-2 text-green-500 text-sm">✓ Loaded</span>}
+                  </div>
+                  <span className="text-xs text-gray-400">To load: <span className="font-semibold text-gray-700">{row.totalOrdered}</span></span>
+                </div>
+
+                {isLoaded ? (
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-green-700 font-semibold">{totalLoaded} loaded{isShort ? ` (short by ${row.totalOrdered - totalLoaded})` : ''}</span>
+                    <button onClick={() => setLoadedItems(prev => { const n = {...prev}; row.items.forEach(oi => delete n[oi.id]); return n })}
+                      className="text-xs text-gray-400 underline underline-offset-2">edit</button>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-3">
+                    <button onClick={() => updateTotal(totalLoaded - 1)}
+                      className="w-12 h-12 rounded-xl bg-gray-100 text-gray-700 text-2xl font-light hover:bg-gray-200 active:bg-gray-300 flex items-center justify-center transition-colors">−</button>
+                    <div className="flex-1 text-center">
+                      <div className="text-3xl font-bold text-gray-800">{totalLoaded}</div>
+                      {isShort && <div className="text-xs text-orange-500 mt-0.5">short by {row.totalOrdered - totalLoaded}</div>}
+                    </div>
+                    <button onClick={() => updateTotal(totalLoaded + 1)}
+                      className="w-12 h-12 rounded-xl bg-blue-100 text-blue-700 text-2xl font-light hover:bg-blue-200 active:bg-blue-300 flex items-center justify-center transition-colors">+</button>
+                    <button onClick={() => confirmLoaded(row)}
+                      className="w-20 h-12 rounded-xl bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 active:bg-blue-800 transition-colors">
+                      Loaded
+                    </button>
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
         <button onClick={completeLoading} disabled={savingLoad}
           className="w-full py-4 rounded-2xl bg-green-600 text-white font-semibold text-base hover:bg-green-700 disabled:opacity-50 transition-colors">
           {savingLoad ? 'Saving...' : '✅ Loading Complete — Start Delivery'}
