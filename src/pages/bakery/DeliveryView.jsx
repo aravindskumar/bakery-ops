@@ -119,7 +119,7 @@ export default function DeliveryView({ standalone }) {
   // Only customers with orders today
   const ordersCustomerIds = new Set(orders.map(o => o.customer_id))
   const routeCustomers = customers
-    .filter(c => ordersCustomerIds.has(c.id))
+    .filter(c => ordersCustomerIds.has(c.id) && (c.route_order || 99) < 99)
     .sort((a, b) => (a.route_order || 99) - (b.route_order || 99))
 
   function getOrderForCustomer(customerId) {
