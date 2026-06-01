@@ -58,7 +58,7 @@ export default function DeliveryView({ standalone }) {
       for (const order of enriched) {
         for (const oi of order.order_items) {
           lq[oi.id] = oi.loaded_qty ?? oi.quantity
-          dq[oi.id] = oi.delivered_qty ?? oi.quantity
+          dq[oi.id] = oi.delivered_qty ?? (oi.loaded_qty ?? oi.quantity)
         }
       }
       setLoadedQtys(lq)
@@ -428,22 +428,32 @@ export default function DeliveryView({ standalone }) {
               </tr>
             </thead>
             <tbody>
-              {selectedOrder.order_items.map((oi, i) => (
-                <tr key={oi.id} className={`border-t border-gray-50 ${i % 2 === 0 ? '' : 'bg-blue-50/20'}`}>
-                  <td className="px-4 py-2.5 text-gray-800">{oi.bakery_items?.name}</td>
-                  <td className="px-4 py-2.5 text-center text-gray-600">{oi.quantity}</td>
-                  <td className="px-4 py-2.5 text-center">
-                    {isDelivered ? (
-                      <span className="font-semibold text-green-700">{deliveredQtys[oi.id] ?? oi.quantity}</span>
-                    ) : (
-                      <input type="number" min="0"
-                        value={deliveredQtys[oi.id] ?? oi.quantity}
-                        onChange={e => setDeliveredQtys(q => ({ ...q, [oi.id]: e.target.value }))}
-                        className="w-16 text-center px-2 py-1.5 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" />
-                    )}
-                  </td>
-                </tr>
-              ))}
+              {selectedOrder.order_items.map((oi, i) => {
+                const maxDeliverable = oi.loaded_qty != null ? oi.loaded_qty : oi.quantity
+                const delivQty = parseInt(deliveredQtys[oi.id]) || oi.quantity
+                const overLoaded = delivQty > maxDeliverable
+                return (
+                  <tr key={oi.id} className={`border-t border-gray-50 ${i % 2 === 0 ? '' : 'bg-blue-50/20'}`}>
+                    <td className="px-4 py-2.5 text-gray-800">{oi.bakery_items?.name}</td>
+                    <td className="px-4 py-2.5 text-center text-gray-600">{oi.quantity}</td>
+                    <td className="px-4 py-2.5 text-center">
+                      {isDelivered ? (
+                        <span className="font-semibold text-green-700">{deliveredQtys[oi.id] ?? oi.quantity}</span>
+                      ) : (
+                        <div className="flex flex-col items-center gap-1">
+                          <input type="number" min="0"
+                            value={deliveredQtys[oi.id] ?? maxDeliverable}
+                            onChange={e => setDeliveredQtys(q => ({ ...q, [oi.id]: e.target.value }))}
+                            className={`w-16 text-center px-2 py-1.5 rounded-lg border text-sm focus:outline-none focus:ring-2 ${
+                              overLoaded ? 'border-orange-300 focus:ring-orange-300 bg-orange-50' : 'border-gray-200 focus:ring-blue-400'
+                            }`} />
+                          {overLoaded && <span className="text-xs text-orange-500">⚠ only {maxDeliverable} loaded</span>}
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
 

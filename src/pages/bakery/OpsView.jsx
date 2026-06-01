@@ -41,7 +41,7 @@ export default function OpsView() {
       if (!itemMap[id]) itemMap[id] = {
         name: oi.bakery_items?.name,
         unit: oi.bakery_items?.unit,
-        ordered: 0, baked: 0, delivered: 0,
+        ordered: 0, baked: 0, loaded: 0, delivered: 0,
         revenueOrdered: 0, revenueDelivered: 0,
       }
       const qty = oi.quantity
@@ -51,8 +51,11 @@ export default function OpsView() {
       if (['bake_completed','delivered'].includes(order.status)) {
         itemMap[id].baked += qty
       }
+      if (oi.loaded_qty != null) {
+        itemMap[id].loaded += oi.loaded_qty
+      }
       if (order.status === 'delivered') {
-        itemMap[id].delivered += qty
+        itemMap[id].delivered += (oi.delivered_qty ?? qty)
         itemMap[id].revenueDelivered += rev
       }
     }
@@ -135,8 +138,10 @@ export default function OpsView() {
                     <th className="text-left px-4 py-2 font-medium">Item</th>
                     <th className="text-center px-3 py-2 font-medium">Ordered</th>
                     <th className="text-center px-3 py-2 font-medium">Baked</th>
+                    <th className="text-center px-3 py-2 font-medium">Loaded</th>
                     <th className="text-center px-3 py-2 font-medium">Delivered</th>
                     <th className="text-center px-3 py-2 font-medium">Bake Short</th>
+                    <th className="text-center px-3 py-2 font-medium">Load Short</th>
                     <th className="text-center px-3 py-2 font-medium">Delivery Short</th>
                     <th className="text-right px-4 py-2 font-medium">Rev. Ordered</th>
                     <th className="text-right px-4 py-2 font-medium">Rev. Delivered</th>
@@ -146,6 +151,7 @@ export default function OpsView() {
                 <tbody>
                   {itemRows.map((row, i) => {
                     const bakeShort = row.ordered - row.baked
+                    const loadShort = row.loaded > 0 ? row.ordered - row.loaded : null
                     const deliveryShort = row.ordered - row.delivered
                     const leakage = row.revenueOrdered - row.revenueDelivered
                     return (
@@ -153,9 +159,13 @@ export default function OpsView() {
                         <td className="px-4 py-2.5 text-gray-800">{row.name}</td>
                         <td className="px-3 py-2.5 text-center text-gray-700">{row.ordered}</td>
                         <td className="px-3 py-2.5 text-center text-gray-700">{row.baked}</td>
+                        <td className="px-3 py-2.5 text-center text-gray-700">{row.loaded > 0 ? row.loaded : '—'}</td>
                         <td className="px-3 py-2.5 text-center text-gray-700">{row.delivered}</td>
                         <td className={`px-3 py-2.5 text-center font-medium ${bakeShort > 0 ? 'text-orange-500' : 'text-gray-300'}`}>
                           {bakeShort > 0 ? bakeShort : '—'}
+                        </td>
+                        <td className={`px-3 py-2.5 text-center font-medium ${loadShort != null && loadShort > 0 ? 'text-orange-500' : 'text-gray-300'}`}>
+                          {loadShort != null && loadShort > 0 ? loadShort : '—'}
                         </td>
                         <td className={`px-3 py-2.5 text-center font-medium ${deliveryShort > 0 ? 'text-red-500' : 'text-gray-300'}`}>
                           {deliveryShort > 0 ? deliveryShort : '—'}
@@ -174,8 +184,10 @@ export default function OpsView() {
                     <td className="px-4 py-2.5 text-amber-800">Total</td>
                     <td className="px-3 py-2.5 text-center text-amber-800">{itemRows.reduce((s,r)=>s+r.ordered,0)}</td>
                     <td className="px-3 py-2.5 text-center text-amber-800">{itemRows.reduce((s,r)=>s+r.baked,0)}</td>
+                    <td className="px-3 py-2.5 text-center text-amber-800">{itemRows.reduce((s,r)=>s+r.loaded,0) || '—'}</td>
                     <td className="px-3 py-2.5 text-center text-amber-800">{itemRows.reduce((s,r)=>s+r.delivered,0)}</td>
                     <td className="px-3 py-2.5 text-center text-orange-500">{itemRows.reduce((s,r)=>s+(r.ordered-r.baked),0) || '—'}</td>
+                    <td className="px-3 py-2.5 text-center text-orange-500">{itemRows.filter(r=>r.loaded>0).reduce((s,r)=>s+(r.ordered-r.loaded),0) || '—'}</td>
                     <td className="px-3 py-2.5 text-center text-red-500">{itemRows.reduce((s,r)=>s+(r.ordered-r.delivered),0) || '—'}</td>
                     <td className="px-4 py-2.5 text-right font-mono text-amber-800">₹{totalOrdered.toFixed(0)}</td>
                     <td className="px-4 py-2.5 text-right font-mono text-amber-800">₹{totalDelivered.toFixed(0)}</td>
