@@ -468,7 +468,7 @@ export default function Orders() {
                   min={(() => { const d = new Date(); d.setDate(d.getDate() + 2); return d.toISOString().split('T')[0] })()}
                   onChange={e => setFutureDeliveryDate(e.target.value)}
                   className="w-full px-3 py-2.5 rounded-xl border border-purple-200 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 bg-white text-purple-800" />
-                {futureDeliveryDate && <p className="text-xs text-gray-400 mt-1">Will appear in bake list on {formatDate((() => { const d = new Date(futureDeliveryDate + 'T00:00:00'); d.setDate(d.getDate() - 1); return d.toISOString().split('T')[0] })())}</p>}
+                {futureDeliveryDate && <p className="text-xs text-purple-600 font-medium mt-1">Will appear in bake list on {formatDate((() => { const d = new Date(futureDeliveryDate + 'T00:00:00'); d.setDate(d.getDate() - 1); return d.toISOString().split('T')[0] })())}</p>}
               </div>
             )}
             <p className="text-xs text-gray-400 mb-5">Enter quantities for each item</p>
