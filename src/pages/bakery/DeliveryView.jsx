@@ -37,19 +37,25 @@ export default function DeliveryView({ standalone }) {
   async function fetchData(date) {
     const fetchDate = date || getToday()
     setLoading(true)
+
     const [{ data: o }, { data: c }] = await Promise.all([
       supabase.from('orders')
-        .select('*, customers(*), order_items(*, bakery_items(name, unit, category))')
+        .select('*, order_items(*, bakery_items(name, unit, category))')
         .eq('delivery_date', fetchDate)
         .in('status', ['bake_completed', 'delivered'])
         .order('created_at'),
       supabase.from('customers').select('*').eq('is_active', true).order('route_order').order('name')
     ])
-    if (o) {
-      setOrders(o)
-      // Init loaded and delivered qtys
+
+    if (o && c) {
+      // Manually join customers to orders
+      const custMap = {}
+      c.forEach(cust => custMap[cust.id] = cust)
+      const enriched = o.map(order => ({ ...order, customers: custMap[order.customer_id] || null }))
+      setOrders(enriched)
+
       const lq = {}, dq = {}
-      for (const order of o) {
+      for (const order of enriched) {
         for (const oi of order.order_items) {
           lq[oi.id] = oi.loaded_qty ?? oi.quantity
           dq[oi.id] = oi.delivered_qty ?? oi.quantity
@@ -57,9 +63,9 @@ export default function DeliveryView({ standalone }) {
       }
       setLoadedQtys(lq)
       setDeliveredQtys(dq)
-      // Mark already delivered customers
+
       const dc = {}
-      for (const order of o) {
+      for (const order of enriched) {
         if (order.status === 'delivered') dc[order.customer_id] = true
       }
       setDeliveredCustomers(dc)
