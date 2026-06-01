@@ -32,14 +32,15 @@ export default function DeliveryView({ standalone }) {
   const today = getToday()
   const yesterday = getYesterday(selectedDate)
 
-  useEffect(() => { fetchData() }, [selectedDate])
+  useEffect(() => { fetchData(selectedDate) }, [selectedDate])
 
-  async function fetchData() {
+  async function fetchData(date) {
+    const fetchDate = date || selectedDate
     setLoading(true)
     const [{ data: o }, { data: c }] = await Promise.all([
       supabase.from('orders')
         .select('*, customers(id, name, type, payment_days, route_order, phone), order_items(*, bakery_items(name, unit, category))')
-        .eq('delivery_date', selectedDate)
+        .eq('delivery_date', fetchDate)
         .in('status', ['bake_completed', 'delivered'])
         .order('created_at'),
       supabase.from('customers').select('*').eq('is_active', true).order('route_order').order('name')
@@ -242,7 +243,7 @@ export default function DeliveryView({ standalone }) {
           <div className="mb-5">
             <label className="text-xs font-medium text-gray-500 mb-1 block">Delivery Date</label>
             <input type="date" value={selectedDate}
-              onChange={e => { setSelectedDate(e.target.value); fetchData() }}
+              onChange={e => { setSelectedDate(e.target.value); fetchData(e.target.value) }}
               className="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" />
           </div>
           {loading ? (
