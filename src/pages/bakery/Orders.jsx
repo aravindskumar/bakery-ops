@@ -144,44 +144,36 @@ export default function Orders() {
     fetchAll()
   }
 
-  // Add to Production — only draft orders
-  async function addToProduction() {
-    const draftOrders = orders.filter(o => o.status === 'draft')
-    if (draftOrders.length === 0) return
-    if (!confirm(`Add ${draftOrders.length} order(s) to production?`)) return
-    setAdvancing('production')
-    await supabase.from('orders')
-      .update({ status: 'sent_to_baker', sent_to_baker_at: new Date().toISOString() })
-      .in('id', draftOrders.map(o => o.id))
-    setAdvancing(null)
-    fetchAll()
-  }
-
-  // Start Baking — locks all production orders, sets delivery date, activates baker view
+  // Start Baking — sends all drafts to baker, sets delivery date, activates baker view
   async function startBaking() {
-    const productionOrders = orders.filter(o => o.status === 'sent_to_baker')
-    if (productionOrders.length === 0) return alert('No orders in production yet.')
+    const draftOrders = orders.filter(o => o.status === 'draft')
+    if (draftOrders.length === 0) return alert('No draft orders to send to baker.')
     const autoDelivery = deliveryDateManual ? deliveryDate : getAutoDeliveryDate()
-    if (!confirm(`Start baking for delivery on ${formatDate(autoDelivery)}? Baker will see the bake list now.`)) return
+    if (!confirm(`Start baking ${draftOrders.length} order(s) for delivery on ${formatDate(autoDelivery)}? Baker will see the bake list now.`)) return
     setStartingBake(true)
     if (!deliveryDateManual) setDeliveryDate(autoDelivery)
     await supabase.from('orders')
-      .update({ baking_started_at: new Date().toISOString(), delivery_date: autoDelivery })
-      .in('id', productionOrders.map(o => o.id))
+      .update({
+        status: 'sent_to_baker',
+        sent_to_baker_at: new Date().toISOString(),
+        baking_started_at: new Date().toISOString(),
+        delivery_date: autoDelivery
+      })
+      .in('id', draftOrders.map(o => o.id))
     setStartingBake(false)
     fetchAll()
   }
 
   // Groupings
   const draftOrders = orders.filter(o => o.status === 'draft')
-  const productionOrders = orders.filter(o => o.status === 'sent_to_baker')
-  const bakingStarted = productionOrders.some(o => o.baking_started_at)
+  const bakingStarted = orders.some(o => o.status === 'sent_to_baker' && o.baking_started_at)
+  const sentOrders = orders.filter(o => o.status === 'sent_to_baker')
   const postBakingOrders = orders.filter(o => ['bake_completed', 'delivered'].includes(o.status))
   const orderedCustomerIds = new Set(orders.map(o => o.customer_id))
   const pendingCustomers = customers.filter(c => !orderedCustomerIds.has(c.id))
   const dayTotal = orders.reduce((sum, o) => sum + parseFloat(o.total_amount || 0), 0)
 
-  // Bake summary — only NEW draft orders not yet in production
+  // Bake summary — all draft orders
   const newItemSummary = {}
   for (const order of draftOrders) {
     for (const oi of order.order_items) {
@@ -192,23 +184,12 @@ export default function Orders() {
   }
   const newSummaryRows = Object.values(newItemSummary).sort((a, b) => (a.category || '').localeCompare(b.category || '') || a.name.localeCompare(b.name))
 
-  // Production summary — orders already added to production
-  const prodItemSummary = {}
-  for (const order of productionOrders) {
-    for (const oi of order.order_items) {
-      const key = oi.bakery_item_id
-      if (!prodItemSummary[key]) prodItemSummary[key] = { name: oi.bakery_items?.name, unit: oi.bakery_items?.unit, total: 0 }
-      prodItemSummary[key].total += oi.quantity
-    }
-  }
-  const prodSummaryRows = Object.values(prodItemSummary).sort((a, b) => a.name.localeCompare(b.name))
-
   const categories = [...new Set(orderLines.map(l => l.category))]
 
   // Pipeline counts
   const pipeline = [
     { label: 'Draft', count: draftOrders.length, color: 'text-gray-500' },
-    { label: 'In Production', count: productionOrders.length, color: 'text-blue-600' },
+    { label: 'Sent to Baker', count: sentOrders.length, color: 'text-blue-600' },
     { label: 'Baked', count: orders.filter(o => o.status === 'bake_completed').length, color: 'text-amber-600' },
     { label: 'Delivered', count: orders.filter(o => o.status === 'delivered').length, color: 'text-green-600' },
   ]
@@ -225,7 +206,7 @@ export default function Orders() {
                 className={`text-xs px-2 py-0.5 rounded-full font-medium border-0 cursor-pointer focus:outline-none ${cfg.color}`}
                 style={{ background: 'transparent' }}>
                 <option value="draft">Draft</option>
-                <option value="sent_to_baker">In Production</option>
+                <option value="sent_to_baker">Sent to Baker</option>
                 <option value="bake_completed">Bake Completed</option>
                 <option value="delivered">Delivered</option>
               </select>
@@ -297,84 +278,57 @@ export default function Orders() {
             </div>
           )}
 
-          {/* Draft orders — hidden after baking started */}
+          {/* Draft orders + bake summary + Start Baking */}
           {draftOrders.length > 0 && !bakingStarted && (
-            <div className="bg-white rounded-2xl border border-amber-100 overflow-hidden">
-              <div className="px-4 py-3 bg-amber-50 text-xs font-semibold text-amber-700 uppercase tracking-wide">
-                New Orders — Draft ({draftOrders.length})
+            <>
+              <div className="bg-white rounded-2xl border border-amber-100 overflow-hidden">
+                <div className="px-4 py-3 bg-amber-50 text-xs font-semibold text-amber-700 uppercase tracking-wide">
+                  Draft Orders ({draftOrders.length})
+                </div>
+                {draftOrders.map((order, i) => renderOrderRow(order, i, true))}
               </div>
-              {draftOrders.map((order, i) => renderOrderRow(order, i, true))}
-            </div>
-          )}
 
-          {/* New orders item summary + Add to Production — hidden after baking started */}
-          {newSummaryRows.length > 0 && !bakingStarted && (
-            <div className="bg-white rounded-2xl border border-amber-100 overflow-hidden">
-              <div className="px-4 py-3 bg-amber-50 text-xs font-semibold text-amber-700 uppercase tracking-wide">New Items Summary</div>
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-xs text-gray-400 uppercase border-b border-gray-100">
-                    <th className="text-left px-4 py-2 font-medium">Item</th>
-                    <th className="text-right px-4 py-2 font-medium">Total Qty</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {newSummaryRows.map((row, i) => (
-                    <tr key={i} className={`border-t border-gray-50 ${i % 2 === 0 ? '' : 'bg-amber-50/20'}`}>
-                      <td className="px-4 py-2.5 text-gray-800">{row.name}</td>
-                      <td className="px-4 py-2.5 text-right font-mono font-semibold text-gray-800">{row.total} <span className="text-xs text-gray-400">{row.unit}</span></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              <div className="px-4 py-4 border-t border-amber-100">
-                <button onClick={addToProduction} disabled={advancing === 'production'}
-                  className="w-full py-3 rounded-xl bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 disabled:opacity-50 transition-colors">
-                  {advancing === 'production' ? 'Adding...' : `📋 Add ${draftOrders.length} order${draftOrders.length > 1 ? 's' : ''} to Production`}
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Production orders */}
-          {productionOrders.length > 0 && (
-            <div className="bg-white rounded-2xl border border-blue-100 overflow-hidden">
-              <div className="px-4 py-3 bg-blue-50 text-xs font-semibold text-blue-700 uppercase tracking-wide">
-                In Production ({productionOrders.length}) {bakingStarted && <span className="ml-2 text-green-600">· Baking Started</span>}
-              </div>
-              {productionOrders.map((order, i) => renderOrderRow(order, i, !bakingStarted))}
-
-              {/* Production summary */}
-              {prodSummaryRows.length > 0 && (
-                <>
-                  <div className="border-t border-blue-100 px-4 py-2 bg-blue-50/50">
-                    <p className="text-xs font-semibold text-blue-600 uppercase tracking-wide">Production Bake List</p>
-                  </div>
+              {/* Bake summary */}
+              {newSummaryRows.length > 0 && (
+                <div className="bg-white rounded-2xl border border-amber-100 overflow-hidden">
+                  <div className="px-4 py-3 bg-amber-50 text-xs font-semibold text-amber-700 uppercase tracking-wide">Bake Summary</div>
                   <table className="w-full text-sm">
+                    <thead>
+                      <tr className="text-xs text-gray-400 uppercase border-b border-gray-100">
+                        <th className="text-left px-4 py-2 font-medium">Item</th>
+                        <th className="text-right px-4 py-2 font-medium">Total Qty</th>
+                      </tr>
+                    </thead>
                     <tbody>
-                      {prodSummaryRows.map((row, i) => (
-                        <tr key={i} className={`border-t border-gray-50 ${i % 2 === 0 ? '' : 'bg-blue-50/20'}`}>
-                          <td className="px-4 py-2 text-gray-800">{row.name}</td>
-                          <td className="px-4 py-2 text-right font-mono font-semibold text-gray-800">{row.total} <span className="text-xs text-gray-400">{row.unit}</span></td>
+                      {newSummaryRows.map((row, i) => (
+                        <tr key={i} className={`border-t border-gray-50 ${i % 2 === 0 ? '' : 'bg-amber-50/20'}`}>
+                          <td className="px-4 py-2.5 text-gray-800">{row.name}</td>
+                          <td className="px-4 py-2.5 text-right font-mono font-semibold text-gray-800">{row.total} <span className="text-xs text-gray-400">{row.unit}</span></td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
-                </>
-              )}
-
-              {/* Start Baking button */}
-              {!bakingStarted && (
-                <div className="px-4 py-4 border-t border-blue-100">
-                  <button onClick={startBaking} disabled={startingBake}
-                    className="w-full py-3 rounded-xl bg-green-600 text-white text-sm font-semibold hover:bg-green-700 disabled:opacity-50 transition-colors">
-                    {startingBake ? 'Starting...' : `🔥 Start Baking — Delivery on ${formatDate(deliveryDateManual ? deliveryDate : getAutoDeliveryDate())}`}
-                  </button>
-                  <p className="text-xs text-gray-400 text-center mt-2">
-                    {deliveryDateManual ? 'Using manually set delivery date' : 'Delivery date auto-set based on current time'}
-                  </p>
+                  <div className="px-4 py-4 border-t border-amber-100">
+                    <button onClick={startBaking} disabled={startingBake}
+                      className="w-full py-3 rounded-xl bg-green-600 text-white text-sm font-semibold hover:bg-green-700 disabled:opacity-50 transition-colors">
+                      {startingBake ? 'Starting...' : `🔥 Start Baking — Delivery on ${formatDate(deliveryDateManual ? deliveryDate : getAutoDeliveryDate())}`}
+                    </button>
+                    <p className="text-xs text-gray-400 text-center mt-2">
+                      {deliveryDateManual ? 'Using manually set delivery date' : 'Delivery date auto-set based on current time'}
+                    </p>
+                  </div>
                 </div>
               )}
+            </>
+          )}
+
+          {/* Sent to Baker orders */}
+          {sentOrders.length > 0 && (
+            <div className="bg-white rounded-2xl border border-blue-100 overflow-hidden">
+              <div className="px-4 py-3 bg-blue-50 text-xs font-semibold text-blue-700 uppercase tracking-wide">
+                Sent to Baker ({sentOrders.length}) · Baking Started ✓
+              </div>
+              {sentOrders.map((order, i) => renderOrderRow(order, i, false))}
             </div>
           )}
 
