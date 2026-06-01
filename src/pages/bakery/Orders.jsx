@@ -276,23 +276,29 @@ export default function Orders() {
       {loading ? <div className="text-center py-12 text-amber-600">Loading...</div> : (
         <div className="space-y-4">
 
-          {/* Pending customers */}
+          {/* Pending customers — blocked after baking started */}
           {pendingCustomers.length > 0 && (
             <div className="bg-white rounded-2xl border border-amber-100 p-4">
               <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Awaiting orders ({pendingCustomers.length})</p>
-              <div className="flex flex-wrap gap-2">
-                {pendingCustomers.map(c => (
-                  <button key={c.id} onClick={() => openNewOrder(c)}
-                    className="px-3 py-1.5 rounded-xl bg-amber-50 border border-amber-200 text-sm text-amber-800 hover:bg-amber-100 transition-colors">
-                    + {c.name}
-                  </button>
-                ))}
-              </div>
+              {bakingStarted ? (
+                <div className="bg-amber-50 rounded-xl px-4 py-3 text-sm text-amber-700 font-medium">
+                  🔒 Baking has started — no new orders can be added for today.
+                </div>
+              ) : (
+                <div className="flex flex-wrap gap-2">
+                  {pendingCustomers.map(c => (
+                    <button key={c.id} onClick={() => openNewOrder(c)}
+                      className="px-3 py-1.5 rounded-xl bg-amber-50 border border-amber-200 text-sm text-amber-800 hover:bg-amber-100 transition-colors">
+                      + {c.name}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
-          {/* Draft orders */}
-          {draftOrders.length > 0 && (
+          {/* Draft orders — hidden after baking started */}
+          {draftOrders.length > 0 && !bakingStarted && (
             <div className="bg-white rounded-2xl border border-amber-100 overflow-hidden">
               <div className="px-4 py-3 bg-amber-50 text-xs font-semibold text-amber-700 uppercase tracking-wide">
                 New Orders — Draft ({draftOrders.length})
@@ -301,8 +307,8 @@ export default function Orders() {
             </div>
           )}
 
-          {/* New orders item summary + Add to Production */}
-          {newSummaryRows.length > 0 && (
+          {/* New orders item summary + Add to Production — hidden after baking started */}
+          {newSummaryRows.length > 0 && !bakingStarted && (
             <div className="bg-white rounded-2xl border border-amber-100 overflow-hidden">
               <div className="px-4 py-3 bg-amber-50 text-xs font-semibold text-amber-700 uppercase tracking-wide">New Items Summary</div>
               <table className="w-full text-sm">
