@@ -34,8 +34,10 @@ export default function Orders() {
   const [customers, setCustomers] = useState([])
   const [bakeryItems, setBakeryItems] = useState([])
   const [orders, setOrders] = useState([])
+  const [futureOrders, setFutureOrders] = useState([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
+  const [isFutureOrder, setIsFutureOrder] = useState(false)
   const [selectedCustomer, setSelectedCustomer] = useState(null)
   const [orderLines, setOrderLines] = useState([])
   const [orderNotes, setOrderNotes] = useState('')
@@ -43,6 +45,7 @@ export default function Orders() {
   const [error, setError] = useState('')
   const [orderDate] = useState(getToday())
   const [deliveryDate, setDeliveryDate] = useState(getTomorrow())
+  const [futureDeliveryDate, setFutureDeliveryDate] = useState('')
   const [deliveryDateManual, setDeliveryDateManual] = useState(false)
   const [editingOrder, setEditingOrder] = useState(null)
   const [advancing, setAdvancing] = useState(null)
@@ -52,14 +55,30 @@ export default function Orders() {
 
   async function fetchAll() {
     setLoading(true)
-    const [{ data: c }, { data: b }, { data: o }] = await Promise.all([
+    const yesterday = new Date()
+    yesterday.setDate(yesterday.getDate() - 1)
+    const yesterdayStr = yesterday.toISOString().split('T')[0]
+
+    const [{ data: c }, { data: b }, { data: o }, { data: f }] = await Promise.all([
       supabase.from('customers').select('*, customer_prices(*)').eq('is_active', true).order('name'),
       supabase.from('bakery_items').select('*').eq('is_active', true).order('category').order('name'),
-      supabase.from('orders').select('*, customers(name, type), order_items(*, bakery_items(name, unit, category))').eq('order_date', orderDate).order('created_at')
+      // Today's regular orders + future orders whose bake date is today (delivery_date = tomorrow)
+      supabase.from('orders')
+        .select('*, customers(name, type), order_items(*, bakery_items(name, unit, category))')
+        .or(`order_date.eq.${orderDate},and(order_type.eq.future,order_date.eq.${orderDate})`)
+        .order('created_at'),
+      // Future orders not yet due for baking (delivery_date > tomorrow)
+      supabase.from('orders')
+        .select('*, customers(name, type), order_items(*, bakery_items(name, unit, category))')
+        .eq('order_type', 'future')
+        .eq('status', 'draft')
+        .gt('delivery_date', getTomorrow())
+        .order('delivery_date')
     ])
     if (c) setCustomers(c)
     if (b) setBakeryItems(b)
     if (o) setOrders(o)
+    if (f) setFutureOrders(f)
     setLoading(false)
   }
 
@@ -69,8 +88,14 @@ export default function Orders() {
     return cp ? cp.custom_price : standardPrice
   }
 
-  function openNewOrder(customer) {
+  function openNewOrder(customer, future = false) {
     setSelectedCustomer(customer)
+    setIsFutureOrder(future)
+    if (future) {
+      // Default future delivery to 2 days from now
+      const d = new Date(); d.setDate(d.getDate() + 2)
+      setFutureDeliveryDate(d.toISOString().split('T')[0])
+    }
     setOrderLines(bakeryItems.map(item => ({
       bakery_item_id: item.id, name: item.name, unit: item.unit, category: item.category,
       unit_price: getPriceForCustomer(customer, item.id, item.selling_price), quantity: 0
@@ -106,16 +131,31 @@ export default function Orders() {
   async function saveOrder() {
     if (!selectedCustomer) return
     if (activeLines.length === 0) return setError('Add at least one item.')
+    if (isFutureOrder && !futureDeliveryDate) return setError('Please set a delivery date.')
     setSaving(true); setError('')
+
+    // For future orders: order_date = day before delivery (bake date)
+    const bakeDate = isFutureOrder
+      ? (() => { const d = new Date(futureDeliveryDate + 'T00:00:00'); d.setDate(d.getDate() - 1); return d.toISOString().split('T')[0] })()
+      : orderDate
+    const finalDeliveryDate = isFutureOrder ? futureDeliveryDate : deliveryDate
+
     try {
       let orderId = editingOrder
       if (editingOrder) {
         await supabase.from('order_items').delete().eq('order_id', editingOrder)
-        await supabase.from('orders').update({ notes: orderNotes, total_amount: orderTotal, delivery_date: deliveryDate }).eq('id', editingOrder)
+        await supabase.from('orders').update({
+          notes: orderNotes, total_amount: orderTotal, delivery_date: finalDeliveryDate
+        }).eq('id', editingOrder)
       } else {
         const { data, error } = await supabase.from('orders').insert({
-          customer_id: selectedCustomer.id, order_date: orderDate, delivery_date: deliveryDate,
-          total_amount: orderTotal, notes: orderNotes, status: 'draft'
+          customer_id: selectedCustomer.id,
+          order_date: bakeDate,
+          delivery_date: finalDeliveryDate,
+          total_amount: orderTotal,
+          notes: orderNotes,
+          status: 'draft',
+          order_type: isFutureOrder ? 'future' : 'regular'
         }).select().single()
         if (error) throw error
         orderId = data.id
@@ -278,6 +318,43 @@ export default function Orders() {
             </div>
           )}
 
+          {/* Future special orders button */}
+          {!bakingStarted && (
+            <div className="bg-white rounded-2xl border border-purple-100 p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs font-semibold text-purple-700 uppercase tracking-wide">Future Special Orders</p>
+                  <p className="text-xs text-gray-400 mt-0.5">Birthday cakes, special occasions, advance orders</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <select
+                    onChange={e => { if (e.target.value) { const c = customers.find(c => c.id === e.target.value); if (c) openNewOrder(c, true); e.target.value = '' } }}
+                    className="px-3 py-2 rounded-xl border border-purple-200 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 bg-white text-purple-800">
+                    <option value="">+ Add future order...</option>
+                    {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </select>
+                </div>
+              </div>
+              {futureOrders.length > 0 && (
+                <div className="mt-3 space-y-2">
+                  {futureOrders.map(order => (
+                    <div key={order.id} className="flex items-center justify-between bg-purple-50 rounded-xl px-3 py-2">
+                      <div>
+                        <span className="text-sm font-medium text-purple-800">{order.customers?.name}</span>
+                        <span className="text-xs text-purple-500 ml-2">Delivery: {formatDate(order.delivery_date)}</span>
+                        <div className="text-xs text-gray-400 mt-0.5">{order.order_items.map(oi => `${oi.quantity} ${oi.bakery_items?.name}`).join(' · ')}</div>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className="font-mono text-sm text-purple-700">₹{parseFloat(order.total_amount).toFixed(0)}</span>
+                        <button onClick={() => deleteOrder(order.id)} className="text-red-400 hover:text-red-600 text-xs">Delete</button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Draft orders + bake summary + Start Baking */}
           {draftOrders.length > 0 && !bakingStarted && (
             <>
@@ -358,8 +435,24 @@ export default function Orders() {
           <div className="bg-white rounded-2xl w-full max-w-lg p-6 shadow-xl">
             <div className="flex items-center justify-between mb-1">
               <h3 className="font-semibold text-gray-800">{selectedCustomer.name}</h3>
-              <span className="text-xs text-gray-400">Delivery: {formatDate(deliveryDate)}</span>
+              {isFutureOrder ? (
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-purple-500 font-medium">🗓 Future Order</span>
+                </div>
+              ) : (
+                <span className="text-xs text-gray-400">Delivery: {formatDate(deliveryDate)}</span>
+              )}
             </div>
+            {isFutureOrder && (
+              <div className="mb-4">
+                <label className="text-xs font-medium text-gray-500 mb-1 block">Delivery Date *</label>
+                <input type="date" value={futureDeliveryDate}
+                  min={(() => { const d = new Date(); d.setDate(d.getDate() + 2); return d.toISOString().split('T')[0] })()}
+                  onChange={e => setFutureDeliveryDate(e.target.value)}
+                  className="w-full px-3 py-2.5 rounded-xl border border-purple-200 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 bg-white text-purple-800" />
+                {futureDeliveryDate && <p className="text-xs text-gray-400 mt-1">Will appear in bake list on {formatDate((() => { const d = new Date(futureDeliveryDate + 'T00:00:00'); d.setDate(d.getDate() - 1); return d.toISOString().split('T')[0] })())}</p>}
+              </div>
+            )}
             <p className="text-xs text-gray-400 mb-5">Enter quantities for each item</p>
             <div className="space-y-5 mb-4">
               {categories.map(cat => {
@@ -409,7 +502,7 @@ export default function Orders() {
               <button onClick={() => { setShowForm(false); setError('') }} className="flex-1 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-600 hover:bg-gray-50">Cancel</button>
               <button onClick={saveOrder} disabled={saving || activeLines.length === 0}
                 className="flex-1 py-2.5 rounded-xl bg-amber-800 text-white text-sm font-medium hover:bg-amber-700 disabled:opacity-50">
-                {saving ? 'Saving...' : editingOrder ? 'Update Order' : 'Save Order'}
+                {saving ? 'Saving...' : editingOrder ? 'Update Order' : isFutureOrder ? 'Save Future Order' : 'Save Order'}
               </button>
             </div>
           </div>
