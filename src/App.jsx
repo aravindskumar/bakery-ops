@@ -29,18 +29,19 @@ function RoleRedirect() {
   return <Navigate to="/admin" replace />
 }
 
-// Prevents back button from leaving the app once logged in
+// Prevents back button from going to login once authenticated
 function BackButtonGuard() {
+  const navigate = useNavigate()
   useEffect(() => {
-    // Replace current history entry so there's no "back" to login
-    window.history.replaceState({ app: true }, '')
+    // Push extra states to bury the login page in history
+    window.history.pushState(null, '', window.location.href)
+    window.history.pushState(null, '', window.location.href)
 
-    function handlePopState(e) {
-      // If trying to go back to nothing (would exit app), push state again
-      if (!e.state || !e.state.app) {
-        window.history.pushState({ app: true }, '')
-      }
+    function handlePopState() {
+      // Always push forward — never allow going back
+      window.history.pushState(null, '', window.location.href)
     }
+
     window.addEventListener('popstate', handlePopState)
     return () => window.removeEventListener('popstate', handlePopState)
   }, [])
