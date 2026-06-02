@@ -239,7 +239,7 @@ export default function DeliveryView({ standalone }) {
         )}
         <span className="text-xl">🚚</span>
         <div>
-          <h1 className="text-sm font-semibold text-blue-900">Delivery</h1>
+          <h1 className="text-sm font-semibold text-blue-900">Sunil Homemade Bakery</h1>
           <p className="text-xs text-blue-500">{fmt(selectedDate)}</p>
         </div>
       </div>
