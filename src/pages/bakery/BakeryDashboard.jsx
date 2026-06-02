@@ -62,7 +62,7 @@ export default function BakeryDashboard() {
             </button>
             <span className="text-xl">🍞</span>
             <div>
-              <h1 className="text-sm font-semibold text-amber-900 leading-tight">Bakery Ops</h1>
+              <h1 className="text-sm font-semibold text-amber-900 leading-tight">Sunil Homemade Bakery</h1>
               {/* Show active tab name on mobile */}
               <p className="text-xs text-amber-600 md:hidden">{activeLabel?.icon} {activeLabel?.label}</p>
               <p className="text-xs text-amber-600 hidden md:block">Operations Manager</p>
@@ -96,7 +96,7 @@ export default function BakeryDashboard() {
             <div className="flex items-center justify-between px-4 py-4 border-b border-amber-100">
               <div className="flex items-center gap-2">
                 <span className="text-xl">🍞</span>
-                <span className="font-semibold text-amber-900">Bakery Ops</span>
+                <span className="font-semibold text-amber-900">Sunil Homemade Bakery</span>
               </div>
               <button onClick={() => setDrawerOpen(false)}
                 className="p-1.5 rounded-lg hover:bg-amber-50 text-amber-600">
