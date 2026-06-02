@@ -50,6 +50,8 @@ export default function DeliveryView({ standalone }) {
     return () => window.removeEventListener('popstate', handlePopState)
   }, [screen])
 
+  useEffect(() => { fetchData(selectedDate) }, [selectedDate])
+
   async function fetchData(date) {
     const fetchDate = date || getToday()
     setLoading(true)
