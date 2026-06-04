@@ -112,7 +112,9 @@ export default function Ledger() {
     if (!confirm(`Generate invoice for ${uninvoiced.length} order(s)?`)) return
     setGenerating(true)
 
-    const total = uninvoiced.reduce((sum, o) => sum + parseFloat(o.total_amount || 0), 0)
+    const total = uninvoiced.reduce((sum, o) => {
+      return sum + o.order_items.reduce((s, oi) => s + (oi.delivered_qty ?? oi.quantity) * oi.unit_price, 0)
+    }, 0)
     const today = new Date().toISOString().split('T')[0]
     const invNumber = invoiceNumber(selectedCustomer.name, today)
 
@@ -365,7 +367,9 @@ export default function Ledger() {
   }
 
   const uninvoicedOrders = orders.filter(o => !o.invoice_id && o.status === 'delivered')
-  const uninvoicedTotal = uninvoicedOrders.reduce((sum, o) => sum + parseFloat(o.total_amount || 0), 0)
+  const uninvoicedTotal = uninvoicedOrders.reduce((sum, o) => {
+    return sum + (o.order_items || []).reduce((s, oi) => s + (oi.delivered_qty ?? oi.quantity) * oi.unit_price, 0)
+  }, 0)
 
   if (selectedCustomer) {
     const out = getOutstanding(selectedCustomer.id)
@@ -495,7 +499,12 @@ export default function Ledger() {
                             : <span className="text-xs bg-gray-100 text-gray-400 px-2 py-0.5 rounded-full capitalize">{order.status}</span>
                         }
                       </div>
-                      <span className="font-mono font-semibold text-gray-800 text-sm">₹{parseFloat(order.total_amount).toFixed(2)}</span>
+                      <span className="font-mono font-semibold text-gray-800 text-sm">
+                        ₹{(order.order_items || []).reduce((s, oi) => s + (oi.delivered_qty ?? oi.quantity) * oi.unit_price, 0).toFixed(2)}
+                        {order.status === 'delivered' && parseFloat(order.total_amount) !== (order.order_items || []).reduce((s, oi) => s + (oi.delivered_qty ?? oi.quantity) * oi.unit_price, 0) && (
+                          <span className="text-xs text-gray-400 ml-1">(ordered ₹{parseFloat(order.total_amount).toFixed(0)})</span>
+                        )}
+                      </span>
                     </div>
                     <div className="text-xs text-gray-400">
                       {order.order_items?.map(oi => `${oi.quantity} ${oi.bakery_items?.name}`).join(' · ')}
