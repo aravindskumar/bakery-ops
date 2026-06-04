@@ -67,7 +67,7 @@ export default function BakeryDashboard() {
               <h1 className="text-sm font-semibold text-amber-900 leading-tight">Sunil Homemade Bakery</h1>
               {/* Show active tab name on mobile */}
               <p className="text-xs text-amber-600 md:hidden">{activeLabel?.icon} {activeLabel?.label}</p>
-              <p className="text-xs text-amber-600 hidden md:block">Operations Manager</p>
+              <p className="text-xs text-amber-600 hidden md:block">Owner</p>
             </div>
           </div>
           <button onClick={signOut} className="text-sm text-amber-600 hover:text-amber-900 transition-colors">Sign out</button>
