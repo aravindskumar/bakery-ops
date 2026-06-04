@@ -30,6 +30,17 @@ export default function BakeListDisplay({ groups, cookieSurplus, date }) {
                   <span className="font-mono text-gray-700 text-sm">{item.qty}</span>
                 </div>
               ))}
+              {group.pastryAlert && (
+                <div className="px-6 py-3 border-t border-amber-100 bg-amber-50">
+                  <p className="text-xs text-amber-800 font-semibold">⚠️ {group.pastryAlert}</p>
+                  <p className="text-xs text-amber-600 mt-0.5">Edit orders before sending to baker if needed.</p>
+                </div>
+              )}
+              {group.surplusNote && (
+                <div className="px-6 py-2 border-t border-amber-50 bg-purple-50">
+                  <p className="text-xs text-purple-700 font-medium">⚡ {group.surplusNote}</p>
+                </div>
+              )}
             </div>
           )}
         </div>

@@ -139,18 +139,31 @@ export function buildBakeList(itemQtyMap, cookieSurplusFromYesterday = 0) {
   if (chocMuffin > 0) groups.push({ group: 'Chocolate Muffin', total: chocMuffin, items: [] })
 
   // ── FRENCH PASTRY ─────────────────────────────────────────
-  const croissant = get('Croissant')
-  const chocCroissant = get('Chocolate Croissant')
-  const danish = get('Danish')
-  if (croissant > 0 || chocCroissant > 0 || danish > 0) {
+  const croissantRaw = get('Croissant')
+  const chocCroissantRaw = get('Chocolate Croissant')
+  const danishRaw = get('Danish')
+  const pastryRawTotal = croissantRaw + chocCroissantRaw + danishRaw
+
+  // Compute alert for admin
+  let pastryAlert = null
+  if (pastryRawTotal > 0 && pastryRawTotal < 12) {
+    pastryAlert = `Total is ${pastryRawTotal} — below minimum of 12. Consider not baking or adding to reach 12.`
+  } else if (pastryRawTotal >= 12 && pastryRawTotal % 6 !== 0) {
+    const lower = Math.floor(pastryRawTotal / 6) * 6
+    const upper = lower + 6
+    pastryAlert = `Total is ${pastryRawTotal} — not a multiple of 6. Bake ${lower} or ${upper}?`
+  }
+
+  if (pastryRawTotal > 0) {
     groups.push({
       group: 'French Pastry Total',
-      total: croissant + chocCroissant + danish,
+      total: pastryRawTotal,
       showTotal: true,
+      pastryAlert,
       items: [
-        { name: 'Croissant', qty: croissant },
-        { name: 'Chocolate Croissant', qty: chocCroissant },
-        { name: 'Danish', qty: danish },
+        { name: 'Croissant', qty: croissantRaw },
+        { name: 'Chocolate Croissant', qty: chocCroissantRaw },
+        { name: 'Danish', qty: danishRaw },
       ].filter(i => i.qty > 0)
     })
   }
