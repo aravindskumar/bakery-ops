@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
+import { buildBakeList } from '../../lib/bakeList'
+import BakeListDisplay from '../../components/BakeListDisplay'
 
 function getTomorrow() {
   const d = new Date()
@@ -218,12 +220,15 @@ export default function Orders() {
   const newItemSummary = {}
   for (const order of draftOrders) {
     for (const oi of order.order_items) {
-      const key = oi.bakery_item_id
-      if (!newItemSummary[key]) newItemSummary[key] = { name: oi.bakery_items?.name, unit: oi.bakery_items?.unit, category: oi.bakery_items?.category, total: 0 }
+      const key = oi.bakery_items?.name
+      if (!key) continue
+      if (!newItemSummary[key]) newItemSummary[key] = { name: key, unit: oi.bakery_items?.unit, category: oi.bakery_items?.category, total: 0 }
       newItemSummary[key].total += oi.quantity
     }
   }
-  const newSummaryRows = Object.values(newItemSummary).sort((a, b) => (a.category || '').localeCompare(b.category || '') || a.name.localeCompare(b.name))
+  const itemQtyMap = {}
+  Object.values(newItemSummary).forEach(r => { itemQtyMap[r.name] = r.total })
+  const { groups: bakeGroups, cookieSurplus } = buildBakeList(itemQtyMap)
 
   const categories = [...new Set(orderLines.map(l => l.category))]
 
@@ -384,25 +389,12 @@ export default function Orders() {
               </div>
 
               {/* Bake summary */}
-              {newSummaryRows.length > 0 && (
+              {bakeGroups.length > 0 && (
                 <div className="bg-white rounded-2xl border border-amber-100 overflow-hidden">
                   <div className="px-4 py-3 bg-amber-50 text-xs font-semibold text-amber-700 uppercase tracking-wide">Bake Summary</div>
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="text-xs text-gray-400 uppercase border-b border-gray-100">
-                        <th className="text-left px-4 py-2 font-medium">Item</th>
-                        <th className="text-right px-4 py-2 font-medium">Total Qty</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {newSummaryRows.map((row, i) => (
-                        <tr key={i} className={`border-t border-gray-50 ${i % 2 === 0 ? '' : 'bg-amber-50/20'}`}>
-                          <td className="px-4 py-2.5 text-gray-800">{row.name}</td>
-                          <td className="px-4 py-2.5 text-right font-mono font-semibold text-gray-800">{row.total} <span className="text-xs text-gray-400">{row.unit}</span></td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                  <div className="p-3">
+                    <BakeListDisplay groups={bakeGroups} cookieSurplus={cookieSurplus} />
+                  </div>
                   <div className="px-4 py-4 border-t border-amber-100">
                     <button onClick={startBaking} disabled={startingBake}
                       className="w-full py-3 rounded-xl bg-green-600 text-white text-sm font-semibold hover:bg-green-700 disabled:opacity-50 transition-colors">
