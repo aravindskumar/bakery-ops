@@ -62,7 +62,10 @@ export default function Ledger() {
   }
 
   function getOutstanding(customerId) {
-    return outstanding.find(o => o.customer_id === customerId) || { balance_due: 0, open_invoices: 0 }
+    return outstanding.find(o => o.customer_id === customerId) || {
+      total_sales: 0, total_invoiced: 0, total_uninvoiced: 0,
+      total_paid: 0, invoice_balance: 0, total_balance: 0
+    }
   }
 
   async function openCustomer(customer) {
@@ -375,10 +378,13 @@ export default function Ledger() {
             <p className="text-sm text-amber-700">{selectedCustomer.type} · {selectedCustomer.phone || 'No phone'}</p>
           </div>
           <div className="text-right">
-            <div className="text-xs text-gray-400">Outstanding</div>
-            <div className={`font-mono font-bold text-lg ${parseFloat(out.balance_due) > 0 ? 'text-red-600' : 'text-green-600'}`}>
-              ₹{parseFloat(out.balance_due).toFixed(2)}
+            <div className="text-xs text-gray-400">Total Balance</div>
+            <div className={`font-mono font-bold text-lg ${parseFloat(out.total_balance) > 0 ? 'text-red-600' : 'text-green-600'}`}>
+              ₹{parseFloat(out.total_balance || 0).toFixed(2)}
             </div>
+            {parseFloat(out.total_uninvoiced || 0) > 0 && (
+              <div className="text-xs text-amber-600 mt-0.5">₹{parseFloat(out.total_uninvoiced).toFixed(0)} uninvoiced</div>
+            )}
           </div>
         </div>
 
@@ -549,40 +555,84 @@ export default function Ledger() {
     <div>
       <div className="mb-6">
         <h2 className="text-xl font-semibold text-amber-900">Customer Ledger</h2>
-        <p className="text-sm text-amber-700 mt-0.5">Invoices, payments and outstanding balances</p>
+        <p className="text-sm text-amber-700 mt-0.5">Sales, invoicing and payment balances</p>
       </div>
 
       {loading ? <div className="text-center py-12 text-amber-600">Loading...</div> : (
         <div className="bg-white rounded-2xl border border-amber-100 overflow-hidden">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="bg-amber-50 text-amber-700 text-xs uppercase tracking-wide">
-                <th className="text-left px-4 py-3 font-medium">Customer</th>
-                <th className="text-left px-4 py-3 font-medium">Type</th>
-                <th className="text-right px-4 py-3 font-medium">Open Invoices</th>
-                <th className="text-right px-4 py-3 font-medium">Outstanding</th>
-                <th className="px-4 py-3"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {customers.map((c, i) => {
-                const out = getOutstanding(c.id)
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-amber-50 text-amber-700 text-xs uppercase tracking-wide">
+                  <th className="text-left px-4 py-3 font-medium">Customer</th>
+                  <th className="text-right px-4 py-3 font-medium">Total Sales</th>
+                  <th className="text-right px-4 py-3 font-medium">Invoiced</th>
+                  <th className="text-right px-4 py-3 font-medium">Uninvoiced</th>
+                  <th className="text-right px-4 py-3 font-medium">Cash Collected</th>
+                  <th className="text-right px-4 py-3 font-medium">Invoice Balance</th>
+                  <th className="text-right px-4 py-3 font-medium">Total Balance</th>
+                  <th className="px-4 py-3"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {customers.map((c, i) => {
+                  const out = getOutstanding(c.id)
+                  const totalSales = parseFloat(out.total_sales || 0)
+                  const invoiced = parseFloat(out.total_invoiced || 0)
+                  const uninvoiced = parseFloat(out.total_uninvoiced || 0)
+                  const paid = parseFloat(out.total_paid || 0)
+                  const invBalance = parseFloat(out.invoice_balance || 0)
+                  const totalBalance = parseFloat(out.total_balance || 0)
+                  return (
+                    <tr key={c.id} className={`border-t border-amber-50 ${i % 2 === 0 ? '' : 'bg-amber-50/30'}`}>
+                      <td className="px-4 py-3 font-medium text-gray-800">{c.name}</td>
+                      <td className="px-4 py-3 text-right font-mono text-gray-700">{totalSales > 0 ? `₹${totalSales.toFixed(0)}` : '—'}</td>
+                      <td className="px-4 py-3 text-right font-mono text-gray-600">{invoiced > 0 ? `₹${invoiced.toFixed(0)}` : '—'}</td>
+                      <td className={`px-4 py-3 text-right font-mono ${uninvoiced > 0 ? 'text-amber-600 font-semibold' : 'text-gray-400'}`}>
+                        {uninvoiced > 0 ? `₹${uninvoiced.toFixed(0)}` : '—'}
+                      </td>
+                      <td className="px-4 py-3 text-right font-mono text-green-600">{paid > 0 ? `₹${paid.toFixed(0)}` : '—'}</td>
+                      <td className={`px-4 py-3 text-right font-mono font-semibold ${invBalance > 0 ? 'text-red-500' : invBalance < 0 ? 'text-green-600' : 'text-gray-400'}`}>
+                        {invBalance !== 0 ? `₹${invBalance.toFixed(0)}` : '—'}
+                      </td>
+                      <td className={`px-4 py-3 text-right font-mono font-semibold ${totalBalance > 0 ? 'text-red-600' : totalBalance < 0 ? 'text-green-600' : 'text-gray-400'}`}>
+                        {totalBalance !== 0 ? `₹${totalBalance.toFixed(0)}` : '—'}
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <button onClick={() => openCustomer(c)} className="text-amber-600 hover:text-amber-800 text-xs font-medium whitespace-nowrap">View →</button>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+              {customers.length > 0 && (() => {
+                const totals = customers.reduce((acc, c) => {
+                  const out = getOutstanding(c.id)
+                  acc.sales += parseFloat(out.total_sales || 0)
+                  acc.invoiced += parseFloat(out.total_invoiced || 0)
+                  acc.uninvoiced += parseFloat(out.total_uninvoiced || 0)
+                  acc.paid += parseFloat(out.total_paid || 0)
+                  acc.invBalance += parseFloat(out.invoice_balance || 0)
+                  acc.totalBalance += parseFloat(out.total_balance || 0)
+                  return acc
+                }, { sales: 0, invoiced: 0, uninvoiced: 0, paid: 0, invBalance: 0, totalBalance: 0 })
                 return (
-                  <tr key={c.id} className={`border-t border-amber-50 ${i % 2 === 0 ? '' : 'bg-amber-50/30'}`}>
-                    <td className="px-4 py-3 font-medium text-gray-800">{c.name}</td>
-                    <td className="px-4 py-3 text-gray-500 capitalize">{c.type}</td>
-                    <td className="px-4 py-3 text-right text-gray-500">{out.open_invoices || 0}</td>
-                    <td className={`px-4 py-3 text-right font-mono font-semibold ${parseFloat(out.balance_due) > 0 ? 'text-red-500' : 'text-gray-400'}`}>
-                      {parseFloat(out.balance_due) > 0 ? `₹${parseFloat(out.balance_due).toFixed(2)}` : '—'}
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      <button onClick={() => openCustomer(c)} className="text-amber-600 hover:text-amber-800 text-xs font-medium">View Ledger →</button>
-                    </td>
-                  </tr>
+                  <tfoot>
+                    <tr className="border-t-2 border-amber-200 bg-amber-50 font-semibold text-amber-900">
+                      <td className="px-4 py-3 text-xs uppercase tracking-wide">Total</td>
+                      <td className="px-4 py-3 text-right font-mono">₹{totals.sales.toFixed(0)}</td>
+                      <td className="px-4 py-3 text-right font-mono">₹{totals.invoiced.toFixed(0)}</td>
+                      <td className="px-4 py-3 text-right font-mono text-amber-700">₹{totals.uninvoiced.toFixed(0)}</td>
+                      <td className="px-4 py-3 text-right font-mono text-green-700">₹{totals.paid.toFixed(0)}</td>
+                      <td className="px-4 py-3 text-right font-mono text-red-600">₹{totals.invBalance.toFixed(0)}</td>
+                      <td className="px-4 py-3 text-right font-mono text-red-700">₹{totals.totalBalance.toFixed(0)}</td>
+                      <td></td>
+                    </tr>
+                  </tfoot>
                 )
-              })}
-            </tbody>
-          </table>
+              })()}
+            </table>
+          </div>
         </div>
       )}
     </div>
