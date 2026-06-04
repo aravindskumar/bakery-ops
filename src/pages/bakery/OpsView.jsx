@@ -79,10 +79,14 @@ export default function OpsView() {
     const orderTotal = order.order_items.reduce((s, oi) => s + oi.quantity * oi.unit_price, 0)
     custMap[id].orders.push(order)
     custMap[id].revenueOrdered += orderTotal
-    if (order.status === 'delivered') custMap[id].revenueDelivered += orderTotal
+    if (order.status === 'delivered') {
+      // Use actual delivered_qty for revenue
+      const deliveredTotal = order.order_items.reduce((s, oi) => s + (oi.delivered_qty ?? oi.quantity) * oi.unit_price, 0)
+      custMap[id].revenueDelivered += deliveredTotal
+    }
     for (const oi of order.order_items) {
       custMap[id].ordered += oi.quantity
-      if (order.status === 'delivered') custMap[id].delivered += oi.quantity
+      if (order.status === 'delivered') custMap[id].delivered += (oi.delivered_qty ?? oi.quantity)
     }
   }
   const custRows = Object.values(custMap).sort((a,b) => b.revenueOrdered - a.revenueOrdered)

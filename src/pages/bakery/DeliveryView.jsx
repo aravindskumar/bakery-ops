@@ -119,23 +119,51 @@ export default function DeliveryView({ standalone }) {
   const allLoaded = loadingRows.every(row => row.items.every(oi => loadedItems[oi.id]))
   const loadedCount = loadingRows.filter(row => row.items.every(oi => loadedItems[oi.id])).length
 
+  // Auto-allocate loaded qty by route priority for a given item
+  function allocateByRoute(row, totalLoadedQty) {
+    // Sort items by customer route_order (first customer gets priority)
+    const sorted = [...row.items].sort((a, b) => {
+      const custA = customers.find(c => orders.find(o => o.id === a.order_id)?.customer_id === c.id)
+      const custB = customers.find(c => orders.find(o => o.id === b.order_id)?.customer_id === c.id)
+      return (custA?.route_order || 99) - (custB?.route_order || 99)
+    })
+    let remaining = totalLoadedQty
+    const newQtys = { ...loadedQtys }
+    for (const oi of sorted) {
+      const allocate = Math.min(oi.quantity, remaining)
+      newQtys[oi.id] = allocate
+      remaining -= allocate
+      if (remaining <= 0) break
+    }
+    // Zero out anything not allocated
+    for (const oi of sorted) {
+      if (newQtys[oi.id] === undefined) newQtys[oi.id] = 0
+    }
+    return newQtys
+  }
+
   async function confirmLoaded(row) {
-    const total = row.items.reduce((s, oi) => s + (parseInt(loadedQtys[oi.id]) || 0), 0)
+    const totalLoaded = row.items.reduce((s, oi) => s + (parseInt(loadedQtys[oi.id]) || 0), 0)
+    // Allocate by route priority
+    const allocatedQtys = allocateByRoute(row, totalLoaded)
+    setLoadedQtys(allocatedQtys)
     const newLoaded = { ...loadedItems }
     row.items.forEach(oi => newLoaded[oi.id] = true)
     setLoadedItems(newLoaded)
-    // Save loaded_qty to DB
+    // Save to DB
     for (const oi of row.items) {
-      await supabase.from('order_items').update({ loaded_qty: parseInt(loadedQtys[oi.id]) || oi.quantity }).eq('id', oi.id)
+      await supabase.from('order_items').update({ loaded_qty: allocatedQtys[oi.id] ?? 0 }).eq('id', oi.id)
     }
   }
 
   async function completeLoading() {
     setSavingLoad(true)
-    // Save all loaded qtys
-    for (const order of orders) {
-      for (const oi of order.order_items) {
-        await supabase.from('order_items').update({ loaded_qty: parseInt(loadedQtys[oi.id]) || oi.quantity }).eq('id', oi.id)
+    // Save all loaded qtys with route priority allocation
+    for (const row of loadingRows) {
+      const totalLoaded = row.items.reduce((s, oi) => s + (parseInt(loadedQtys[oi.id]) || 0), 0)
+      const allocatedQtys = allocateByRoute(row, totalLoaded)
+      for (const oi of row.items) {
+        await supabase.from('order_items').update({ loaded_qty: allocatedQtys[oi.id] ?? 0 }).eq('id', oi.id)
       }
     }
     setSavingLoad(false)
