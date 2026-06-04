@@ -97,9 +97,11 @@ export function buildBakeList(itemQtyMap, cookieSurplusFromYesterday = 0) {
     const bigQty = get(cg.big)
     const smallQty = get(cg.small)
     if (bigQty > 0 || smallQty > 0) {
+      const total = bigQty + (smallQty / 2)
       groups.push({
         group: `${cg.label} Total`,
-        total: bigQty + smallQty,
+        total,
+        totalDisplay: `${total % 1 === 0 ? total : total.toFixed(1)}`,
         showTotal: true,
         items: [
           { name: cg.big, qty: bigQty },
