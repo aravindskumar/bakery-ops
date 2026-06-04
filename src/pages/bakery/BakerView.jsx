@@ -68,9 +68,29 @@ export default function BakerView({ standalone }) {
     const baked = parseInt(quantities[item.id]) || 0
     setSaving(prev => ({ ...prev, [item.id]: true }))
 
-    const affectedOrderIds = orders
-      .filter(o => o.order_items.some(oi => oi.bakery_item_id === item.id))
-      .map(o => o.id)
+    // Get all order_items for this bakery item across affected orders
+    const affectedOrders = orders.filter(o => o.order_items.some(oi => oi.bakery_item_id === item.id))
+    const affectedOrderIds = affectedOrders.map(o => o.id)
+
+    // Distribute baked qty proportionally across order items
+    const allOrderItems = affectedOrders.flatMap(o => o.order_items.filter(oi => oi.bakery_item_id === item.id))
+    const totalOrdered = allOrderItems.reduce((s, oi) => s + oi.quantity, 0)
+    let remaining = baked
+
+    for (const oi of allOrderItems) {
+      // Proportional allocation: each order gets (its_qty / total_ordered) * baked
+      const proportion = totalOrdered > 0 ? oi.quantity / totalOrdered : 0
+      const itemBaked = Math.min(oi.quantity, Math.round(proportion * baked))
+      remaining -= itemBaked
+      await supabase.from('order_items').update({ baked_qty: itemBaked }).eq('id', oi.id)
+    }
+
+    // Assign any rounding remainder to last item
+    if (remaining !== 0 && allOrderItems.length > 0) {
+      const lastOi = allOrderItems[allOrderItems.length - 1]
+      const { data } = await supabase.from('order_items').select('baked_qty').eq('id', lastOi.id).single()
+      if (data) await supabase.from('order_items').update({ baked_qty: (data.baked_qty || 0) + remaining }).eq('id', lastOi.id)
+    }
 
     if (affectedOrderIds.length > 0) {
       await supabase.from('orders')

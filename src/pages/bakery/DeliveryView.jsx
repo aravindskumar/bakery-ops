@@ -307,10 +307,13 @@ export default function DeliveryView({ standalone }) {
           {loadingRows.map((row, i) => {
             const totalLoaded = row.items.reduce((s, oi) => s + (parseInt(loadedQtys[oi.id]) || 0), 0)
             const isLoaded = row.items.every(oi => loadedItems[oi.id])
+            const totalBaked = row.items.reduce((s, oi) => s + (oi.baked_qty != null ? oi.baked_qty : oi.quantity), 0)
+            const maxLoadable = totalBaked // can't load more than baked
             const isShort = totalLoaded < row.totalOrdered
+            const overBaked = totalLoaded > maxLoadable
 
             function updateTotal(newVal) {
-              const val = Math.max(0, newVal)
+              const val = Math.max(0, Math.min(newVal, maxLoadable))
               const newQtys = { ...loadedQtys }
               row.items.forEach((oi, idx) => { newQtys[oi.id] = idx === 0 ? val : 0 })
               setLoadedQtys(newQtys)
@@ -323,7 +326,12 @@ export default function DeliveryView({ standalone }) {
                     <span className="font-semibold text-gray-800">{row.name}</span>
                     {isLoaded && <span className="ml-2 text-green-500 text-sm">✓ Loaded</span>}
                   </div>
-                  <span className="text-xs text-gray-400">To load: <span className="font-semibold text-gray-700">{row.totalOrdered}</span></span>
+                  <div className="text-right">
+                    <span className="text-xs text-gray-400">Ordered: <span className="font-semibold text-gray-700">{row.totalOrdered}</span></span>
+                    {maxLoadable < row.totalOrdered && (
+                      <span className="ml-2 text-xs text-orange-500">Baked: {maxLoadable}</span>
+                    )}
+                  </div>
                 </div>
 
                 {isLoaded ? (
@@ -338,7 +346,8 @@ export default function DeliveryView({ standalone }) {
                       className="w-12 h-12 rounded-xl bg-gray-100 text-gray-700 text-2xl font-light hover:bg-gray-200 active:bg-gray-300 flex items-center justify-center transition-colors">−</button>
                     <div className="flex-1 text-center">
                       <div className="text-3xl font-bold text-gray-800">{totalLoaded}</div>
-                      {isShort && <div className="text-xs text-orange-500 mt-0.5">short by {row.totalOrdered - totalLoaded}</div>}
+                      {isShort && !overBaked && <div className="text-xs text-orange-500 mt-0.5">short by {row.totalOrdered - totalLoaded}</div>}
+                      {overBaked && <div className="text-xs text-red-500 mt-0.5">max {maxLoadable} (baked)</div>}
                     </div>
                     <button onClick={() => updateTotal(totalLoaded + 1)}
                       className="w-12 h-12 rounded-xl bg-blue-100 text-blue-700 text-2xl font-light hover:bg-blue-200 active:bg-blue-300 flex items-center justify-center transition-colors">+</button>
@@ -447,9 +456,10 @@ export default function DeliveryView({ standalone }) {
             </thead>
             <tbody>
               {selectedOrder.order_items.map((oi, i) => {
-                const maxDeliverable = oi.loaded_qty != null ? oi.loaded_qty : oi.quantity
-                const delivQty = parseInt(deliveredQtys[oi.id]) || oi.quantity
-                const overLoaded = delivQty > maxDeliverable
+                const bakedMax = oi.baked_qty != null ? oi.baked_qty : oi.quantity
+                const maxDeliverable = oi.loaded_qty != null ? Math.min(oi.loaded_qty, bakedMax) : bakedMax
+                const delivQty = parseInt(deliveredQtys[oi.id]) || 0
+                const overMax = delivQty > maxDeliverable
                 return (
                   <tr key={oi.id} className={`border-t border-gray-50 ${i % 2 === 0 ? '' : 'bg-blue-50/20'}`}>
                     <td className="px-4 py-2.5 text-gray-800">{oi.bakery_items?.name}</td>
@@ -459,13 +469,21 @@ export default function DeliveryView({ standalone }) {
                         <span className="font-semibold text-green-700">{deliveredQtys[oi.id] ?? oi.quantity}</span>
                       ) : (
                         <div className="flex flex-col items-center gap-1">
-                          <input type="number" min="0"
+                          <input type="number" min="0" max={maxDeliverable}
                             value={deliveredQtys[oi.id] ?? maxDeliverable}
-                            onChange={e => setDeliveredQtys(q => ({ ...q, [oi.id]: e.target.value }))}
+                            onChange={e => {
+                              const val = Math.min(parseInt(e.target.value) || 0, maxDeliverable)
+                              setDeliveredQtys(q => ({ ...q, [oi.id]: val }))
+                            }}
                             className={`w-16 text-center px-2 py-1.5 rounded-lg border text-sm focus:outline-none focus:ring-2 ${
-                              overLoaded ? 'border-orange-300 focus:ring-orange-300 bg-orange-50' : 'border-gray-200 focus:ring-blue-400'
+                              overMax ? 'border-red-300 focus:ring-red-300 bg-red-50' : 'border-gray-200 focus:ring-blue-400'
                             }`} />
-                          {overLoaded && <span className="text-xs text-orange-500">⚠ only {maxDeliverable} loaded</span>}
+                          {bakedMax < oi.quantity && (
+                            <span className="text-xs text-orange-500">baked: {bakedMax}</span>
+                          )}
+                          {oi.loaded_qty != null && oi.loaded_qty < bakedMax && (
+                            <span className="text-xs text-orange-500">loaded: {oi.loaded_qty}</span>
+                          )}
                         </div>
                       )}
                     </td>
