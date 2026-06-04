@@ -48,8 +48,10 @@ export default function OpsView() {
       const rev = qty * oi.unit_price
       itemMap[id].ordered += qty
       itemMap[id].revenueOrdered += rev
-      if (['bake_completed','delivered'].includes(order.status)) {
-        itemMap[id].baked += qty
+      if (oi.baked_qty != null) {
+        itemMap[id].baked += oi.baked_qty
+      } else if (['bake_completed','delivered'].includes(order.status)) {
+        itemMap[id].baked += qty // fallback for old orders
       }
       if (oi.loaded_qty != null) {
         itemMap[id].loaded += oi.loaded_qty

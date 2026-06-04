@@ -75,8 +75,9 @@ export default function DeliveryView({ standalone }) {
       const lq = {}, dq = {}
       for (const order of enriched) {
         for (const oi of order.order_items) {
-          lq[oi.id] = oi.loaded_qty ?? oi.quantity
-          dq[oi.id] = oi.delivered_qty ?? (oi.loaded_qty ?? oi.quantity)
+          const bakedMax = oi.baked_qty != null ? oi.baked_qty : oi.quantity
+          lq[oi.id] = oi.loaded_qty != null ? Math.min(oi.loaded_qty, bakedMax) : bakedMax
+          dq[oi.id] = oi.delivered_qty ?? lq[oi.id]
         }
       }
       setLoadedQtys(lq)
