@@ -76,7 +76,9 @@ export default function DeliveryView({ standalone }) {
       for (const order of enriched) {
         for (const oi of order.order_items) {
           const bakedMax = oi.baked_qty != null ? oi.baked_qty : oi.quantity
-          lq[oi.id] = oi.loaded_qty != null ? Math.min(oi.loaded_qty, bakedMax) : bakedMax
+          const alreadyDelivered = oi.delivered_qty ?? 0
+          const remaining = Math.max(0, bakedMax - alreadyDelivered)
+          lq[oi.id] = oi.loaded_qty != null ? Math.min(oi.loaded_qty, remaining) : remaining
           dq[oi.id] = oi.delivered_qty ?? lq[oi.id]
         }
       }
@@ -94,17 +96,23 @@ export default function DeliveryView({ standalone }) {
   }
 
   // ── Loading Step ─────────────────────────────────────────────
-  // Aggregate all items across all orders for loading
+  // Only include undelivered orders in loading summary
+  const undeliveredOrders = orders.filter(o => o.status !== 'delivered')
   const loadingSummary = {}
-  for (const order of orders) {
+  for (const order of undeliveredOrders) {
     for (const oi of order.order_items) {
       const key = oi.bakery_item_id
+      // Only load what hasn't been delivered yet
+      const alreadyDelivered = oi.delivered_qty ?? 0
+      const bakedMax = oi.baked_qty != null ? oi.baked_qty : oi.quantity
+      const remainingToLoad = Math.max(0, bakedMax - alreadyDelivered)
+      if (remainingToLoad === 0) continue
       if (!loadingSummary[key]) loadingSummary[key] = {
         name: oi.bakery_items?.name, unit: oi.bakery_items?.unit,
         category: oi.bakery_items?.category, items: [], totalOrdered: 0
       }
-      loadingSummary[key].items.push(oi)
-      loadingSummary[key].totalOrdered += oi.quantity
+      loadingSummary[key].items.push({ ...oi, remainingToLoad })
+      loadingSummary[key].totalOrdered += remainingToLoad
     }
   }
   const loadingRows = Object.values(loadingSummary).sort((a, b) => a.name.localeCompare(b.name))
