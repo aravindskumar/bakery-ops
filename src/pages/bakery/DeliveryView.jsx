@@ -155,20 +155,27 @@ export default function DeliveryView({ standalone }) {
       if (!dq[oi.id]) dq[oi.id] = loadedQtys[oi.id] ?? oi.quantity
     }
     setDeliveredQtys(dq)
-    setCashAmount(getAutoPaymentAmount(customer, order))
+    setCashAmount('') // will be set after delivery is confirmed
     setSelectedCustomer(customer)
     setScreen('customer')
   }
 
-  function getAutoPaymentAmount(customer, order) {
+  function calcDeliveredAmount(order, dQtys) {
+    // Calculate actual amount based on delivered qty × unit price
+    return order.order_items.reduce((sum, oi) => {
+      const qty = parseInt(dQtys[oi.id] ?? oi.quantity) || 0
+      return sum + qty * parseFloat(oi.unit_price)
+    }, 0).toFixed(2)
+  }
+
+  function getAutoPaymentAmount(customer, order, dQtys) {
     const days = customer.payment_days || 0
-    if (days === 0) return parseFloat(order?.total_amount || 0).toFixed(2)
+    if (days === 0) return calcDeliveredAmount(order, dQtys)
     if (days === 1) {
-      // Find yesterday's order
       const yOrder = orders.find(o => o.customer_id === customer.id && o.order_date === yesterday)
-      return yOrder ? parseFloat(yOrder.total_amount || 0).toFixed(2) : ''
+      return yOrder ? calcDeliveredAmount(yOrder, dQtys) : ''
     }
-    return '' // longer terms — open
+    return ''
   }
 
   async function markDelivered() {
@@ -188,6 +195,10 @@ export default function DeliveryView({ standalone }) {
       status: 'delivered',
       delivered_at: new Date().toISOString()
     }).eq('id', order.id)
+
+    // Now set cash amount based on actual delivered qtys
+    const autoAmount = getAutoPaymentAmount(selectedCustomer, order, deliveredQtys)
+    setCashAmount(autoAmount)
 
     setDeliveredCustomers(prev => ({ ...prev, [selectedCustomer.id]: true }))
     setSavingDelivery(false)
