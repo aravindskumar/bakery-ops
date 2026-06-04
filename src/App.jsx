@@ -1,4 +1,4 @@
-import { Routes, Route, Navigate, useNavigate } from 'react-router-dom'
+import { Routes, Route, Navigate } from 'react-router-dom'
 import { useAuth } from './lib/AuthContext'
 import { useEffect } from 'react'
 import Login from './pages/Login'
@@ -29,17 +29,16 @@ function RoleRedirect() {
   return <Navigate to="/admin" replace />
 }
 
-// Prevents back button from going to login once authenticated
+// Prevents back button/swipe from going to login once authenticated
 function BackButtonGuard() {
-  const navigate = useNavigate()
   useEffect(() => {
-    // Push extra states to bury the login page in history
-    window.history.pushState(null, '', window.location.href)
-    window.history.pushState(null, '', window.location.href)
+    // Push many states to make it very hard to swipe back to login
+    for (let i = 0; i < 10; i++) {
+      window.history.pushState({ guard: i }, '', window.location.href)
+    }
 
     function handlePopState() {
-      // Always push forward — never allow going back
-      window.history.pushState(null, '', window.location.href)
+      window.history.pushState({ guard: 99 }, '', window.location.href)
     }
 
     window.addEventListener('popstate', handlePopState)
