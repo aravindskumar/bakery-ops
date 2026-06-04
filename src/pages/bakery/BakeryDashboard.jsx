@@ -10,11 +10,13 @@ import Ledger from './Ledger'
 import BakerView from './BakerView'
 import UserManagement from './UserManagement'
 import OpsView from './OpsView'
+import CashCollected from './CashCollected'
 
 const tabs = [
   { id: 'orders',      label: 'Orders',       icon: '📦' },
   { id: 'ops',         label: 'Operations',   icon: '📊' },
   { id: 'ledger',      label: 'Ledger',       icon: '🧾' },
+  { id: 'cash',        label: 'Cash',         icon: '💵' },
   { id: 'baker',       label: 'Baker',        icon: '🧑‍🍳' },
   { id: 'customers',   label: 'Customers',    icon: '👥' },
   { id: 'items',       label: 'Bakery Items', icon: '🥐' },
@@ -132,6 +134,7 @@ export default function BakeryDashboard() {
         {activeTab === 'orders'      && <Orders />}
         {activeTab === 'ops'         && <OpsView />}
         {activeTab === 'ledger'      && <Ledger />}
+        {activeTab === 'cash'        && <CashCollected />}
         {activeTab === 'baker'       && <BakerView />}
         {activeTab === 'customers'   && <Customers />}
         {activeTab === 'items'       && <BakeryItems />}
