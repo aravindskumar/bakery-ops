@@ -560,9 +560,9 @@ export default function Ledger() {
 
       {loading ? <div className="text-center py-12 text-amber-600">Loading...</div> : (
         <div className="bg-white rounded-2xl border border-amber-100 overflow-hidden">
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto overflow-y-auto max-h-[70vh]">
             <table className="w-full text-sm">
-              <thead>
+              <thead className="sticky top-0 z-10">
                 <tr className="bg-amber-50 text-amber-700 text-xs uppercase tracking-wide">
                   <th className="text-left px-4 py-3 font-medium">Customer</th>
                   <th className="text-right px-4 py-3 font-medium">Total Sales</th>
