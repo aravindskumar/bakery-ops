@@ -102,17 +102,17 @@ export default function DeliveryView({ standalone }) {
   for (const order of undeliveredOrders) {
     for (const oi of order.order_items) {
       const key = oi.bakery_item_id
-      // Only load what hasn't been delivered yet
       const alreadyDelivered = oi.delivered_qty ?? 0
       const bakedMax = oi.baked_qty != null ? oi.baked_qty : oi.quantity
       const remainingToLoad = Math.max(0, bakedMax - alreadyDelivered)
       if (remainingToLoad === 0) continue
       if (!loadingSummary[key]) loadingSummary[key] = {
         name: oi.bakery_items?.name, unit: oi.bakery_items?.unit,
-        category: oi.bakery_items?.category, items: [], totalOrdered: 0
+        category: oi.bakery_items?.category, items: [], totalOrdered: 0, totalBakedAll: 0
       }
       loadingSummary[key].items.push({ ...oi, remainingToLoad })
-      loadingSummary[key].totalOrdered += remainingToLoad
+      loadingSummary[key].totalOrdered += oi.quantity  // original ordered qty
+      loadingSummary[key].totalBakedAll += bakedMax     // total baked qty
     }
   }
   const loadingRows = Object.values(loadingSummary).sort((a, b) => a.name.localeCompare(b.name))
@@ -327,9 +327,8 @@ export default function DeliveryView({ standalone }) {
           {loadingRows.map((row, i) => {
             const totalLoaded = row.items.reduce((s, oi) => s + (parseInt(loadedQtys[oi.id]) || 0), 0)
             const isLoaded = row.items.every(oi => loadedItems[oi.id])
-            const totalBaked = row.items.reduce((s, oi) => s + (oi.baked_qty != null ? oi.baked_qty : oi.quantity), 0)
-            const maxLoadable = totalBaked // can't load more than baked
-            const isShort = totalLoaded < row.totalOrdered
+            const maxLoadable = row.totalBakedAll // cap at baked qty
+            const isShort = row.totalBakedAll < row.totalOrdered
             const overBaked = totalLoaded > maxLoadable
 
             function updateTotal(newVal) {
@@ -346,11 +345,12 @@ export default function DeliveryView({ standalone }) {
                     <span className="font-semibold text-gray-800">{row.name}</span>
                     {isLoaded && <span className="ml-2 text-green-500 text-sm">✓ Loaded</span>}
                   </div>
-                  <div className="text-right">
-                    <span className="text-xs text-gray-400">Ordered: <span className="font-semibold text-gray-700">{row.totalOrdered}</span></span>
-                    {maxLoadable < row.totalOrdered && (
-                      <span className="ml-2 text-xs text-orange-500">Baked: {maxLoadable}</span>
-                    )}
+                  <div className="text-right space-y-0.5">
+                    <div className="text-xs text-gray-400">Ordered: <span className="font-semibold text-gray-700">{row.totalOrdered}</span></div>
+                    <div className={`text-xs ${isShort ? 'text-orange-500 font-semibold' : 'text-gray-400'}`}>
+                      Baked: <span className="font-semibold">{row.totalBakedAll}</span>
+                      {isShort && <span className="ml-1">(short by {row.totalOrdered - row.totalBakedAll})</span>}
+                    </div>
                   </div>
                 </div>
 

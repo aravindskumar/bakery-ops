@@ -57,8 +57,9 @@ export default function OpsView() {
         itemMap[id].loaded += oi.loaded_qty
       }
       if (order.status === 'delivered') {
-        itemMap[id].delivered += (oi.delivered_qty ?? qty)
-        itemMap[id].revenueDelivered += rev
+        const delivQty = oi.delivered_qty ?? qty
+        itemMap[id].delivered += delivQty
+        itemMap[id].revenueDelivered += delivQty * oi.unit_price
       }
     }
   }
@@ -153,8 +154,8 @@ export default function OpsView() {
                 <tbody>
                   {itemRows.map((row, i) => {
                     const bakeShort = row.ordered - row.baked
-                    const loadShort = row.loaded > 0 ? row.ordered - row.loaded : null
-                    const deliveryShort = row.ordered - row.delivered
+                    const loadShort = row.loaded > 0 ? row.baked - row.loaded : null
+                    const deliveryShort = row.loaded > 0 ? row.loaded - row.delivered : row.baked - row.delivered
                     const leakage = row.revenueOrdered - row.revenueDelivered
                     return (
                       <tr key={i} className={`border-t border-gray-50 ${i % 2 === 0 ? '' : 'bg-amber-50/20'}`}>
@@ -188,9 +189,9 @@ export default function OpsView() {
                     <td className="px-3 py-2.5 text-center text-amber-800">{itemRows.reduce((s,r)=>s+r.baked,0)}</td>
                     <td className="px-3 py-2.5 text-center text-amber-800">{itemRows.reduce((s,r)=>s+r.loaded,0) || '—'}</td>
                     <td className="px-3 py-2.5 text-center text-amber-800">{itemRows.reduce((s,r)=>s+r.delivered,0)}</td>
-                    <td className="px-3 py-2.5 text-center text-orange-500">{itemRows.reduce((s,r)=>s+(r.ordered-r.baked),0) || '—'}</td>
-                    <td className="px-3 py-2.5 text-center text-orange-500">{itemRows.filter(r=>r.loaded>0).reduce((s,r)=>s+(r.ordered-r.loaded),0) || '—'}</td>
-                    <td className="px-3 py-2.5 text-center text-red-500">{itemRows.reduce((s,r)=>s+(r.ordered-r.delivered),0) || '—'}</td>
+                    <td className="px-3 py-2.5 text-center text-orange-500">{itemRows.reduce((s,r)=>s+Math.max(0,r.ordered-r.baked),0) || '—'}</td>
+                    <td className="px-3 py-2.5 text-center text-orange-500">{itemRows.filter(r=>r.loaded>0).reduce((s,r)=>s+Math.max(0,r.baked-r.loaded),0) || '—'}</td>
+                    <td className="px-3 py-2.5 text-center text-red-500">{itemRows.reduce((s,r)=>s+Math.max(0,(r.loaded||r.baked)-r.delivered),0) || '—'}</td>
                     <td className="px-4 py-2.5 text-right font-mono text-amber-800">₹{totalOrdered.toFixed(0)}</td>
                     <td className="px-4 py-2.5 text-right font-mono text-amber-800">₹{totalDelivered.toFixed(0)}</td>
                     <td className="px-4 py-2.5 text-right font-mono text-red-500">₹{totalLeakage.toFixed(0)}</td>
