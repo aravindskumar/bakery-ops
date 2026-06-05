@@ -58,10 +58,8 @@ export function buildBakeList(itemQtyMap, cookieSurplusFromYesterday = 0) {
     })
   }
 
-  // ── CHOCOLATE CAKE ────────────────────────────────────────
-  const bananaChocBig = get('Banana Chocolate Big')
-  const bananaChocSmall = get('Banana Chocolate Small')
-  if (chocCake > 0) groups.push({ group: 'Banana Chocolate Cake', total: chocCake, items: [] })
+  // ── BANANA CHOCOLATE CAKE (standalone - moved to grouped section below) ──
+
 
   // ── CINNAMON ROLL ─────────────────────────────────────────
   const cinnamonRoll = get('Cinnamon Roll')
