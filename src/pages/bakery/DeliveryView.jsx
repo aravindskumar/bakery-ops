@@ -498,56 +498,61 @@ export default function DeliveryView({ standalone }) {
           </div>
         </div>
 
-        {/* Items to deliver */}
+        {/* Items to deliver — grouped by category */}
         <div className="bg-white rounded-2xl border border-blue-100 overflow-hidden mb-4">
           <div className="px-4 py-3 bg-blue-50 text-xs font-semibold text-blue-700 uppercase tracking-wide">Items</div>
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-xs text-gray-400 uppercase border-b border-gray-100">
-                <th className="text-left px-4 py-2 font-medium">Item</th>
-                <th className="text-center px-3 py-2 font-medium">Ordered</th>
-                <th className="text-center px-3 py-2 font-medium">Deliver</th>
-              </tr>
-            </thead>
-            <tbody>
-              {selectedOrder.order_items.map((oi, i) => {
-                const bakedMax = oi.baked_qty != null ? oi.baked_qty : oi.quantity
-                const maxDeliverable = oi.loaded_qty != null ? Math.min(oi.loaded_qty, bakedMax) : bakedMax
-                const delivQty = parseInt(deliveredQtys[oi.id]) || 0
-                const overMax = delivQty > maxDeliverable
-                return (
-                  <tr key={oi.id} className={`border-t border-gray-50 ${i % 2 === 0 ? '' : 'bg-blue-50/20'}`}>
-                    <td className="px-4 py-2.5 text-gray-800">{oi.bakery_items?.name}</td>
-                    <td className="px-4 py-2.5 text-center text-gray-600">{oi.quantity}</td>
-                    <td className="px-4 py-2.5 text-center">
-                      {isDelivered ? (
-                        <span className="font-semibold text-green-700">{deliveredQtys[oi.id] ?? oi.quantity}</span>
-                      ) : (
-                        <div className="flex flex-col items-center gap-1">
-                          <input type="number" min="0" max={maxDeliverable}
-                            value={deliveredQtys[oi.id] ?? maxDeliverable}
-                            onChange={e => {
-                              const val = Math.min(parseInt(e.target.value) || 0, maxDeliverable)
-                              setDeliveredQtys(q => ({ ...q, [oi.id]: val }))
-                            }}
-                            className={`w-16 text-center px-2 py-1.5 rounded-lg border text-sm focus:outline-none focus:ring-2 ${
-                              overMax ? 'border-red-300 focus:ring-red-300 bg-red-50' : 'border-gray-200 focus:ring-blue-400'
-                            }`} />
-                          {bakedMax < oi.quantity && (
-                            <span className="text-xs text-orange-500">baked: {bakedMax}</span>
-                          )}
-                          {oi.loaded_qty != null && oi.loaded_qty < bakedMax && (
-                            <span className="text-xs text-orange-500">loaded: {oi.loaded_qty}</span>
-                          )}
-                        </div>
-                      )}
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-
+          {(() => {
+            // Group by category
+            const categoryMap = {}
+            for (const oi of selectedOrder.order_items) {
+              const cat = oi.bakery_items?.category || 'Other'
+              if (!categoryMap[cat]) categoryMap[cat] = []
+              categoryMap[cat].push(oi)
+            }
+            const categories = Object.keys(categoryMap).sort()
+            return categories.map((cat, ci) => (
+              <div key={cat}>
+                <div className="px-4 py-1.5 bg-gray-50 text-xs font-semibold text-gray-400 uppercase tracking-wide border-t border-gray-100">
+                  {cat}
+                </div>
+                {categoryMap[cat].map((oi, i) => {
+                  const bakedMax = oi.baked_qty != null ? oi.baked_qty : oi.quantity
+                  const maxDeliverable = oi.loaded_qty != null ? Math.min(oi.loaded_qty, bakedMax) : bakedMax
+                  const currentVal = parseInt(deliveredQtys[oi.id] ?? maxDeliverable) || 0
+                  // Build dropdown options 0..maxDeliverable
+                  const options = Array.from({ length: maxDeliverable + 1 }, (_, n) => n)
+                  return (
+                    <div key={oi.id} className={`flex items-center justify-between px-4 py-3 border-t border-gray-50`}>
+                      <div className="flex-1">
+                        <div className="text-sm text-gray-800">{oi.bakery_items?.name}</div>
+                        {(bakedMax < oi.quantity || (oi.loaded_qty != null && oi.loaded_qty < bakedMax)) && (
+                          <div className="text-xs text-orange-500 mt-0.5">
+                            {bakedMax < oi.quantity && `baked: ${bakedMax}`}
+                            {oi.loaded_qty != null && oi.loaded_qty < bakedMax && ` · loaded: ${oi.loaded_qty}`}
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-3 shrink-0">
+                        <span className="text-xs text-gray-400">of {oi.quantity}</span>
+                        {isDelivered ? (
+                          <span className="font-semibold text-green-700 w-12 text-center">{deliveredQtys[oi.id] ?? oi.quantity}</span>
+                        ) : (
+                          <select
+                            value={currentVal}
+                            onChange={e => setDeliveredQtys(q => ({ ...q, [oi.id]: parseInt(e.target.value) }))}
+                            className="w-16 text-center px-1 py-1.5 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white">
+                            {options.map(n => (
+                              <option key={n} value={n}>{n}</option>
+                            ))}
+                          </select>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            ))
+          })()}
         </div>
 
         {/* Delivered button */}
