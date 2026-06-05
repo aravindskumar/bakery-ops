@@ -84,13 +84,11 @@ export function buildBakeList(itemQtyMap, cookieSurplusFromYesterday = 0) {
   // ── CAKE GROUPS (big + small, grouped for display) ────────
   const cakeGroups = [
     { label: 'Carrot Cake', big: 'Carrot Cake Big', small: 'Carrot Cake Small' },
-    { label: 'Brownie', big: 'Brownie Big', small: 'Brownie Small' },
     { label: 'Banana Cake', big: 'Banana Cake Big', small: 'Banana Cake Small' },
     { label: 'Vegan Banana Cake', big: 'Vegan Banana Cake Big', small: 'Vegan Banana Cake Small' },
     { label: 'Oreo Cheesecake', big: 'Oreo Cheesecake Big', small: 'Oreo Cheesecake Small' },
     { label: 'Mango Cheesecake', big: 'Mango Cheesecake Big', small: 'Mango Cheesecake Small' },
     { label: 'Blueberry Cheesecake', big: 'Blueberry Cheesecake Big', small: 'Blueberry Cheesecake Small' },
-    { label: 'White Chocolate Brownie', big: 'White Chocolate Brownie Big', small: 'White Chocolate Brownie Small' },
   ]
 
   for (const cg of cakeGroups) {
@@ -111,7 +109,26 @@ export function buildBakeList(itemQtyMap, cookieSurplusFromYesterday = 0) {
     }
   }
 
-  // ── STANDALONE ITEMS ─────────────────────────────────────
+  // ── COMBINED BROWNIE GROUP ────────────────────────────────
+  const brownieBig = get('Brownie Big')
+  const brownieSmall = get('Brownie Small')
+  const wcBig = get('White Chocolate Brownie Big')
+  const wcSmall = get('White Chocolate Brownie Small')
+  if (brownieBig > 0 || brownieSmall > 0 || wcBig > 0 || wcSmall > 0) {
+    const total = brownieBig + (brownieSmall / 2) + wcBig + (wcSmall / 2)
+    groups.push({
+      group: 'Brownie Total',
+      total,
+      totalDisplay: `${total % 1 === 0 ? total : total.toFixed(1)}`,
+      showTotal: true,
+      items: [
+        { name: 'Brownie Big', qty: brownieBig },
+        { name: 'Brownie Small', qty: brownieSmall },
+        { name: 'White Chocolate Brownie Big', qty: wcBig },
+        { name: 'White Chocolate Brownie Small', qty: wcSmall },
+      ].filter(i => i.qty > 0)
+    })
+  }
   const standalones = [
     'Chocolate Cookie', // already in cookies group, skip if grouped
     'Lotus Biscoff Cheesecake Small',
