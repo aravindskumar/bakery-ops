@@ -59,8 +59,8 @@ export function buildBakeList(itemQtyMap, cookieSurplusFromYesterday = 0) {
   }
 
   // ── CHOCOLATE CAKE ────────────────────────────────────────
-  const chocCake = get('Choco Banana Cake')
-  if (chocCake > 0) groups.push({ group: 'Choco Banana Cake', total: chocCake, items: [] })
+  const chocCake = get('Banana Chocolate Cake')
+  if (chocCake > 0) groups.push({ group: 'Banana Chocolate Cake', total: chocCake, items: [] })
 
   // ── CINNAMON ROLL ─────────────────────────────────────────
   const cinnamonRoll = get('Cinnamon Roll')
