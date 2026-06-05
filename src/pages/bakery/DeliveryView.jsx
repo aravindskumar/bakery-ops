@@ -219,24 +219,31 @@ export default function DeliveryView({ standalone }) {
     if (!order) return
     setSavingDelivery(true)
 
-    // Save delivered qtys
-    for (const oi of order.order_items) {
-      await supabase.from('order_items')
-        .update({ delivered_qty: parseInt(deliveredQtys[oi.id]) || oi.quantity })
-        .eq('id', oi.id)
+    try {
+      // Save all delivered qtys in parallel
+      await Promise.all(order.order_items.map(oi =>
+        supabase.from('order_items')
+          .update({ delivered_qty: parseInt(deliveredQtys[oi.id] ?? oi.quantity) || 0 })
+          .eq('id', oi.id)
+      ))
+
+      // Mark order as delivered
+      const { error } = await supabase.from('orders').update({
+        status: 'delivered',
+        delivered_at: new Date().toISOString()
+      }).eq('id', order.id)
+
+      if (error) throw error
+
+      // Set cash amount based on actual delivered qtys
+      const autoAmount = getAutoPaymentAmount(selectedCustomer, order, deliveredQtys)
+      setCashAmount(autoAmount)
+      setDeliveredCustomers(prev => ({ ...prev, [selectedCustomer.id]: true }))
+    } catch (e) {
+      console.error('markDelivered error:', e)
+      alert('Error saving delivery. Please try again.')
     }
 
-    // Mark order as delivered
-    await supabase.from('orders').update({
-      status: 'delivered',
-      delivered_at: new Date().toISOString()
-    }).eq('id', order.id)
-
-    // Now set cash amount based on actual delivered qtys
-    const autoAmount = getAutoPaymentAmount(selectedCustomer, order, deliveredQtys)
-    setCashAmount(autoAmount)
-
-    setDeliveredCustomers(prev => ({ ...prev, [selectedCustomer.id]: true }))
     setSavingDelivery(false)
   }
 
