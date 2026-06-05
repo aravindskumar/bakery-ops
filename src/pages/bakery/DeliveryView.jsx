@@ -16,20 +16,28 @@ function fmt(d) {
 // Screens: 'loading' | 'delivery' | 'customer'
 export default function DeliveryView({ standalone }) {
   const { signOut } = useAuth()
-  const [screen, setScreen] = useState('start') // start | loading | delivery | customer
+  // Persist screen in sessionStorage so refresh doesn't reset to start
+  const [screen, setScreenState] = useState(() => {
+    return sessionStorage.getItem('deliveryScreen') || 'start'
+  })
+  function setScreen(s) {
+    sessionStorage.setItem('deliveryScreen', s)
+    setScreenState(s)
+  }
   const [selectedDate, setSelectedDate] = useState(getToday())
   const [orders, setOrders] = useState([])
   const [customers, setCustomers] = useState([])
   const [loading, setLoading] = useState(true)
   const [selectedCustomer, setSelectedCustomer] = useState(null)
-  const [loadedQtys, setLoadedQtys] = useState({}) // orderItemId -> qty
-  const [loadedItems, setLoadedItems] = useState({}) // orderItemId -> bool
-  const [deliveredQtys, setDeliveredQtys] = useState({}) // orderItemId -> qty
+  const [loadedQtys, setLoadedQtys] = useState({})
+  const [loadedItems, setLoadedItems] = useState({})
+  const [deliveredQtys, setDeliveredQtys] = useState({})
   const [savingLoad, setSavingLoad] = useState(false)
   const [savingDelivery, setSavingDelivery] = useState(false)
   const [cashAmount, setCashAmount] = useState('')
-  const [deliveredCustomers, setDeliveredCustomers] = useState({}) // customerId -> bool
-  const [cashSaved, setCashSaved] = useState({}) // customerId -> bool
+  const [deliveredCustomers, setDeliveredCustomers] = useState({})
+  const [cashSaved, setCashSaved] = useState({})
+  const [editingDelivery, setEditingDelivery] = useState({}) // customerId -> bool
   const today = getToday()
   const yesterday = getYesterday(selectedDate)
 
@@ -167,8 +175,7 @@ export default function DeliveryView({ standalone }) {
       }
     }
     setSavingLoad(false)
-    setScreen('delivery')
-  }
+    setScreen('delivery')  }
 
   // ── Delivery Route ────────────────────────────────────────────
   // Only customers with orders today
@@ -322,7 +329,7 @@ export default function DeliveryView({ standalone }) {
           <div className="mb-5">
             <label className="text-xs font-medium text-gray-500 mb-1 block">Delivery Date</label>
             <input type="date" value={selectedDate}
-              onChange={e => { setSelectedDate(e.target.value); fetchData(e.target.value) }}
+              onChange={e => { setSelectedDate(e.target.value); fetchData(e.target.value); sessionStorage.removeItem('deliveryScreen'); setScreen('start') }}
               className="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" />
           </div>
           {loading ? (
@@ -534,11 +541,11 @@ export default function DeliveryView({ standalone }) {
                       </div>
                       <div className="flex items-center gap-3 shrink-0">
                         <span className="text-xs text-gray-400">of {oi.quantity}</span>
-                        {isDelivered ? (
+                        {isDelivered && !editingDelivery[selectedCustomer.id] ? (
                           <span className="font-semibold text-green-700 w-12 text-center">{deliveredQtys[oi.id] ?? oi.quantity}</span>
                         ) : (
                           <select
-                            value={currentVal}
+                            value={parseInt(deliveredQtys[oi.id] ?? maxDeliverable) || 0}
                             onChange={e => setDeliveredQtys(q => ({ ...q, [oi.id]: parseInt(e.target.value) }))}
                             className="w-16 text-center px-1 py-1.5 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white">
                             {options.map(n => (
@@ -556,10 +563,31 @@ export default function DeliveryView({ standalone }) {
         </div>
 
         {/* Delivered button */}
-        {!isDelivered && (
+        {!isDelivered ? (
           <button onClick={markDelivered} disabled={savingDelivery}
             className="w-full py-4 rounded-2xl bg-green-600 text-white font-semibold text-base hover:bg-green-700 disabled:opacity-50 transition-colors mb-4">
             {savingDelivery ? 'Saving...' : '✅ Mark as Delivered'}
+          </button>
+        ) : editingDelivery[selectedCustomer.id] ? (
+          <button onClick={async () => {
+            setSavingDelivery(true)
+            try {
+              await Promise.all(selectedOrder.order_items.map(oi =>
+                supabase.from('order_items')
+                  .update({ delivered_qty: parseInt(deliveredQtys[oi.id] ?? oi.quantity) || 0 })
+                  .eq('id', oi.id)
+              ))
+              setEditingDelivery(prev => ({ ...prev, [selectedCustomer.id]: false }))
+            } catch (e) { alert('Error saving. Please try again.') }
+            setSavingDelivery(false)
+          }} disabled={savingDelivery}
+            className="w-full py-4 rounded-2xl bg-blue-600 text-white font-semibold text-base hover:bg-blue-700 disabled:opacity-50 transition-colors mb-4">
+            {savingDelivery ? 'Saving...' : '💾 Save Updated Quantities'}
+          </button>
+        ) : (
+          <button onClick={() => setEditingDelivery(prev => ({ ...prev, [selectedCustomer.id]: true }))}
+            className="w-full py-3 rounded-2xl bg-gray-100 text-gray-600 font-semibold text-sm hover:bg-gray-200 transition-colors mb-4">
+            ✏️ Edit Delivered Quantities
           </button>
         )}
 
