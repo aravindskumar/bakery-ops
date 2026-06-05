@@ -59,7 +59,8 @@ export function buildBakeList(itemQtyMap, cookieSurplusFromYesterday = 0) {
   }
 
   // ── CHOCOLATE CAKE ────────────────────────────────────────
-  const chocCake = get('Banana Chocolate Cake')
+  const bananaChocBig = get('Banana Chocolate Big')
+  const bananaChocSmall = get('Banana Chocolate Small')
   if (chocCake > 0) groups.push({ group: 'Banana Chocolate Cake', total: chocCake, items: [] })
 
   // ── CINNAMON ROLL ─────────────────────────────────────────
@@ -129,6 +130,24 @@ export function buildBakeList(itemQtyMap, cookieSurplusFromYesterday = 0) {
       ].filter(i => i.qty > 0)
     })
   }
+
+  // ── BANANA CHOCOLATE GROUP ────────────────────────────────
+  const bananaChocBig = get('Banana Chocolate Big')
+  const bananaChocSmall = get('Banana Chocolate Small')
+  if (bananaChocBig > 0 || bananaChocSmall > 0) {
+    const total = bananaChocBig + (bananaChocSmall / 2)
+    groups.push({
+      group: 'Banana Chocolate Total',
+      total,
+      totalDisplay: `${total % 1 === 0 ? total : total.toFixed(1)}`,
+      showTotal: true,
+      items: [
+        { name: 'Banana Chocolate Big', qty: bananaChocBig },
+        { name: 'Banana Chocolate Small', qty: bananaChocSmall },
+      ].filter(i => i.qty > 0)
+    })
+  }
+
   const standalones = [
     'Chocolate Cookie', // already in cookies group, skip if grouped
     'Lotus Biscoff Cheesecake Small',
