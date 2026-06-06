@@ -296,8 +296,6 @@ export default function DeliveryView({ standalone }) {
     setReturnScreen('done')
     setSavingReturns(false)
   }
-
-  function calcDeliveredAmount(order, dQtys) {
     // Calculate actual amount based on delivered qty × unit price
     return order.order_items.reduce((sum, oi) => {
       const qty = parseInt(dQtys[oi.id] ?? oi.quantity) || 0
@@ -487,64 +485,81 @@ export default function DeliveryView({ standalone }) {
           </div>
         </div>
 
-        <div className="space-y-3 mb-4">
-          {loadingRows.map((row, i) => {
-            const totalLoaded = row.items.reduce((s, oi) => s + (parseInt(loadedQtys[oi.id]) || 0), 0)
-            const isLoaded = row.items.every(oi => loadedItems[oi.id])
-            const maxLoadable = row.totalBakedAll // cap at baked qty
-            const isShort = row.totalBakedAll < row.totalOrdered
-            const overBaked = totalLoaded > maxLoadable
+        {(() => {
+          const CATEGORY_ORDER = ['Bread', 'Pastry', 'Dry Cake', 'Wet Cake', 'Cookie', 'Pie', 'Other']
+          const catMap = {}
+          for (const row of loadingRows) {
+            const cat = row.category || 'Other'
+            if (!catMap[cat]) catMap[cat] = []
+            catMap[cat].push(row)
+          }
+          const sortedCats = Object.keys(catMap).sort((a, b) => {
+            const ai = CATEGORY_ORDER.indexOf(a); const bi = CATEGORY_ORDER.indexOf(b)
+            return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi)
+          })
+          return sortedCats.map(cat => (
+            <div key={cat} className="mb-4">
+              <div className="px-1 py-1.5 text-xs font-bold text-blue-700 uppercase tracking-wide mb-2">{cat}</div>
+              <div className="space-y-3">
+                {catMap[cat].map((row, i) => {
+                  const totalLoaded = row.items.reduce((s, oi) => s + (parseInt(loadedQtys[oi.id]) || 0), 0)
+                  const isLoaded = row.items.every(oi => loadedItems[oi.id])
+                  const maxLoadable = row.totalBakedAll
+                  const isShort = row.totalBakedAll < row.totalOrdered
+                  const overBaked = totalLoaded > maxLoadable
 
-            function updateTotal(newVal) {
-              const val = Math.max(0, Math.min(newVal, maxLoadable))
-              const newQtys = { ...loadedQtys }
-              row.items.forEach((oi, idx) => { newQtys[oi.id] = idx === 0 ? val : 0 })
-              setLoadedQtys(newQtys)
-            }
+                  function updateTotal(newVal) {
+                    const val = Math.max(0, Math.min(newVal, maxLoadable))
+                    const newQtys = { ...loadedQtys }
+                    row.items.forEach((oi, idx) => { newQtys[oi.id] = idx === 0 ? val : 0 })
+                    setLoadedQtys(newQtys)
+                  }
 
-            return (
-              <div key={i} className={`bg-white rounded-2xl border px-4 py-4 ${isLoaded ? 'border-green-200 bg-green-50/30' : 'border-blue-100'}`}>
-                <div className="flex items-center justify-between mb-3">
-                  <div>
-                    <span className="font-semibold text-gray-800">{row.name}</span>
-                    {isLoaded && <span className="ml-2 text-green-500 text-sm">✓ Loaded</span>}
-                  </div>
-                  <div className="text-right space-y-0.5">
-                    <div className="text-xs text-gray-400">Ordered: <span className="font-semibold text-gray-700">{row.totalOrdered}</span></div>
-                    <div className={`text-xs ${isShort ? 'text-orange-500 font-semibold' : 'text-gray-400'}`}>
-                      Baked: <span className="font-semibold">{row.totalBakedAll}</span>
-                      {isShort && <span className="ml-1">(short by {row.totalOrdered - row.totalBakedAll})</span>}
+                  return (
+                    <div key={i} className={`bg-white rounded-2xl border px-4 py-4 ${isLoaded ? 'border-green-200 bg-green-50/30' : 'border-blue-100'}`}>
+                      <div className="flex items-center justify-between mb-3">
+                        <div>
+                          <span className="font-semibold text-gray-800">{row.name}</span>
+                          {isLoaded && <span className="ml-2 text-green-500 text-sm">✓ Loaded</span>}
+                        </div>
+                        <div className="text-right space-y-0.5">
+                          <div className="text-xs text-gray-400">Ordered: <span className="font-semibold text-gray-700">{row.totalOrdered}</span></div>
+                          <div className={`text-xs ${isShort ? 'text-orange-500 font-semibold' : 'text-gray-400'}`}>
+                            Baked: <span className="font-semibold">{row.totalBakedAll}</span>
+                            {isShort && <span className="ml-1">(short by {row.totalOrdered - row.totalBakedAll})</span>}
+                          </div>
+                        </div>
+                      </div>
+                      {isLoaded ? (
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm text-green-700 font-semibold">{totalLoaded} loaded{isShort ? ` (short by ${row.totalOrdered - totalLoaded})` : ''}</span>
+                          <button onClick={() => setLoadedItems(prev => { const n = {...prev}; row.items.forEach(oi => delete n[oi.id]); return n })}
+                            className="text-xs text-gray-400 underline underline-offset-2">edit</button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-3">
+                          <button onClick={() => updateTotal(totalLoaded - 1)}
+                            className="w-12 h-12 rounded-xl bg-gray-100 text-gray-700 text-2xl font-light hover:bg-gray-200 active:bg-gray-300 flex items-center justify-center transition-colors">−</button>
+                          <div className="flex-1 text-center">
+                            <div className="text-3xl font-bold text-gray-800">{totalLoaded}</div>
+                            {isShort && !overBaked && <div className="text-xs text-orange-500 mt-0.5">short by {row.totalOrdered - totalLoaded}</div>}
+                            {overBaked && <div className="text-xs text-red-500 mt-0.5">max {maxLoadable} (baked)</div>}
+                          </div>
+                          <button onClick={() => updateTotal(totalLoaded + 1)}
+                            className="w-12 h-12 rounded-xl bg-blue-100 text-blue-700 text-2xl font-light hover:bg-blue-200 active:bg-blue-300 flex items-center justify-center transition-colors">+</button>
+                          <button onClick={() => confirmLoaded(row)}
+                            className="w-20 h-12 rounded-xl bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 active:bg-blue-800 transition-colors">
+                            Loaded
+                          </button>
+                        </div>
+                      )}
                     </div>
-                  </div>
-                </div>
-
-                {isLoaded ? (
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-green-700 font-semibold">{totalLoaded} loaded{isShort ? ` (short by ${row.totalOrdered - totalLoaded})` : ''}</span>
-                    <button onClick={() => setLoadedItems(prev => { const n = {...prev}; row.items.forEach(oi => delete n[oi.id]); return n })}
-                      className="text-xs text-gray-400 underline underline-offset-2">edit</button>
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-3">
-                    <button onClick={() => updateTotal(totalLoaded - 1)}
-                      className="w-12 h-12 rounded-xl bg-gray-100 text-gray-700 text-2xl font-light hover:bg-gray-200 active:bg-gray-300 flex items-center justify-center transition-colors">−</button>
-                    <div className="flex-1 text-center">
-                      <div className="text-3xl font-bold text-gray-800">{totalLoaded}</div>
-                      {isShort && !overBaked && <div className="text-xs text-orange-500 mt-0.5">short by {row.totalOrdered - totalLoaded}</div>}
-                      {overBaked && <div className="text-xs text-red-500 mt-0.5">max {maxLoadable} (baked)</div>}
-                    </div>
-                    <button onClick={() => updateTotal(totalLoaded + 1)}
-                      className="w-12 h-12 rounded-xl bg-blue-100 text-blue-700 text-2xl font-light hover:bg-blue-200 active:bg-blue-300 flex items-center justify-center transition-colors">+</button>
-                    <button onClick={() => confirmLoaded(row)}
-                      className="w-20 h-12 rounded-xl bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 active:bg-blue-800 transition-colors">
-                      Loaded
-                    </button>
-                  </div>
-                )}
+                  )
+                })}
               </div>
-            )
-          })}
-        </div>
+            </div>
+          ))
+        })()}
         <button onClick={completeLoading} disabled={savingLoad}
           className="w-full py-4 rounded-2xl bg-green-600 text-white font-semibold text-base hover:bg-green-700 disabled:opacity-50 transition-colors">
           {savingLoad ? 'Saving...' : '✅ Loading Complete — Start Delivery'}
@@ -568,8 +583,7 @@ export default function DeliveryView({ standalone }) {
             {deliveredCount === routeCustomers.length && routeCustomers.length > 0 && (
               <span className="text-xs text-green-600 font-semibold">All delivered! 🎉</span>
             )}
-          </div>
-        </div>
+          </div>        </div>
 
         <div className="bg-white rounded-2xl border border-blue-100 overflow-hidden">
           {routeCustomers.map((customer, i) => {
