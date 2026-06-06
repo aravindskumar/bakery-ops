@@ -111,9 +111,23 @@ export default function BakerView({ standalone }) {
       if (data) await supabase.from('order_items').update({ baked_qty: (data.baked_qty || 0) + remaining }).eq('id', lastOi.id)
     }
 
-    await supabase.from('orders')
-      .update({ status: 'bake_completed', bake_completed_at: new Date().toISOString() })
-      .in('id', affectedOrders.map(o => o.id))
+    // Only mark orders as bake_completed if ALL their items now have baked_qty set
+    const ordersToComplete = []
+    for (const order of affectedOrders) {
+      // Re-fetch all order items for this order to check completion
+      const { data: allItems } = await supabase
+        .from('order_items')
+        .select('baked_qty')
+        .eq('order_id', order.id)
+      const allBaked = allItems && allItems.every(oi => oi.baked_qty != null)
+      if (allBaked) ordersToComplete.push(order.id)
+    }
+
+    if (ordersToComplete.length > 0) {
+      await supabase.from('orders')
+        .update({ status: 'bake_completed', bake_completed_at: new Date().toISOString() })
+        .in('id', ordersToComplete)
+    }
 
     setSaving(prev => ({ ...prev, [item.id]: false }))
     setCompleted(prev => ({ ...prev, [item.id]: true }))
