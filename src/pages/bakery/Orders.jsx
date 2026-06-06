@@ -409,21 +409,93 @@ export default function Orders() {
             </>
           )}
 
-          {/* Sent to Baker orders */}
+          {/* Sent to Baker orders + Delivery Run assignment */}
           {sentOrders.length > 0 && (
             <div className="bg-white rounded-2xl border border-blue-100 overflow-hidden">
               <div className="px-4 py-3 bg-blue-50 text-xs font-semibold text-blue-700 uppercase tracking-wide">
                 Sent to Baker ({sentOrders.length}) · Baking Started ✓
               </div>
-              {sentOrders.map((order, i) => renderOrderRow(order, i, false))}
+              {sentOrders.map((order, i) => (
+                <div key={order.id} className={`border-t border-blue-50 ${i === 0 ? 'border-t-0' : ''}`}>
+                  <div className="flex items-center justify-between px-4 py-3">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium text-gray-800">{order.customers?.name}</span>
+                        <select value={order.status} onChange={e => changeStatus(order, e.target.value)}
+                          className={`text-xs px-2 py-0.5 rounded-full font-medium border-0 cursor-pointer focus:outline-none ${STATUS_CONFIG[order.status]?.color}`}
+                          style={{ background: 'transparent' }}>
+                          <option value="draft">Draft</option>
+                          <option value="sent_to_baker">Sent to Baker</option>
+                          <option value="bake_completed">Bake Completed</option>
+                          <option value="delivered">Delivered</option>
+                        </select>
+                      </div>
+                      <div className="text-xs text-gray-400 mt-0.5 truncate">
+                        {order.order_items.map(oi => `${oi.quantity} ${oi.bakery_items?.name}`).join(' · ')}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 ml-3 shrink-0">
+                      <div className="flex items-center gap-1">
+                        <span className="text-xs text-gray-400">Run</span>
+                        <select value={order.delivery_run || 1}
+                          onChange={async e => {
+                            const run = parseInt(e.target.value)
+                            await supabase.from('orders').update({ delivery_run: run }).eq('id', order.id)
+                            fetchAll()
+                          }}
+                          className="text-xs px-2 py-1 rounded-lg border border-blue-200 bg-blue-50 text-blue-700 font-semibold focus:outline-none focus:ring-2 focus:ring-blue-400">
+                          {[1,2,3,4].map(n => <option key={n} value={n}>{n}</option>)}
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
           )}
 
-          {/* Post-baking orders */}
+          {/* Post-baking orders + Delivery Run assignment */}
           {postBakingOrders.length > 0 && (
             <div className="bg-white rounded-2xl border border-amber-100 overflow-hidden">
               <div className="px-4 py-3 bg-amber-50 text-xs font-semibold text-amber-700 uppercase tracking-wide">Baked / Delivered</div>
-              {postBakingOrders.map((order, i) => renderOrderRow(order, i, false))}
+              {postBakingOrders.map((order, i) => (
+                <div key={order.id} className={`border-t border-amber-50 ${i === 0 ? 'border-t-0' : ''}`}>
+                  <div className="flex items-center justify-between px-4 py-3">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium text-gray-800">{order.customers?.name}</span>
+                        <select value={order.status} onChange={e => changeStatus(order, e.target.value)}
+                          className={`text-xs px-2 py-0.5 rounded-full font-medium border-0 cursor-pointer focus:outline-none ${STATUS_CONFIG[order.status]?.color}`}
+                          style={{ background: 'transparent' }}>
+                          <option value="draft">Draft</option>
+                          <option value="sent_to_baker">Sent to Baker</option>
+                          <option value="bake_completed">Bake Completed</option>
+                          <option value="delivered">Delivered</option>
+                        </select>
+                      </div>
+                      <div className="text-xs text-gray-400 mt-0.5 truncate">
+                        {order.order_items.map(oi => `${oi.quantity} ${oi.bakery_items?.name}`).join(' · ')}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3 ml-3 shrink-0">
+                      {order.status !== 'delivered' && (
+                        <div className="flex items-center gap-1">
+                          <span className="text-xs text-gray-400">Run</span>
+                          <select value={order.delivery_run || 1}
+                            onChange={async e => {
+                              const run = parseInt(e.target.value)
+                              await supabase.from('orders').update({ delivery_run: run }).eq('id', order.id)
+                              fetchAll()
+                            }}
+                            className="text-xs px-2 py-1 rounded-lg border border-amber-200 bg-amber-50 text-amber-700 font-semibold focus:outline-none focus:ring-2 focus:ring-amber-400">
+                            {[1,2,3,4].map(n => <option key={n} value={n}>{n}</option>)}
+                          </select>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
               <div className="border-t-2 border-amber-100 px-4 py-3 flex justify-between bg-amber-50/50">
                 <span className="text-sm font-semibold text-amber-800">Day Total</span>
                 <span className="font-mono font-bold text-amber-900">₹{dayTotal.toFixed(2)}</span>

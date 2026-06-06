@@ -38,6 +38,7 @@ export default function DeliveryView({ standalone }) {
   const [deliveredCustomers, setDeliveredCustomers] = useState({})
   const [savingCash, setSavingCash] = useState(false)
   const [editingDelivery, setEditingDelivery] = useState({}) // customerId -> bool
+  const [selectedRun, setSelectedRun] = useState(1)
   const today = getToday()
   const yesterday = getYesterday(selectedDate)
 
@@ -68,7 +69,7 @@ export default function DeliveryView({ standalone }) {
       supabase.from('orders')
         .select('*, order_items(*, bakery_items(name, unit, category))')
         .eq('delivery_date', fetchDate)
-        .in('status', ['bake_completed', 'delivered'])
+        .in('status', ['sent_to_baker', 'bake_completed', 'delivered'])
         .order('created_at'),
       supabase.from('customers').select('*').eq('is_active', true).order('route_order').order('name')
     ])
@@ -95,7 +96,7 @@ export default function DeliveryView({ standalone }) {
 
       const dc = {}
       for (const order of enriched) {
-        if (order.status === 'delivered') dc[order.customer_id] = true
+        if (order.status === 'delivered' && (order.delivery_run || 1) === selectedRun) dc[order.customer_id] = true
       }
       setDeliveredCustomers(dc)
     }
@@ -104,8 +105,8 @@ export default function DeliveryView({ standalone }) {
   }
 
   // ── Loading Step ─────────────────────────────────────────────
-  // Only include undelivered orders in loading summary
-  const undeliveredOrders = orders.filter(o => o.status !== 'delivered')
+  // Only include undelivered orders for this run
+  const undeliveredOrders = orders.filter(o => o.status !== 'delivered' && (o.delivery_run || 1) === selectedRun)
   const loadingSummary = {}
   for (const order of undeliveredOrders) {
     for (const oi of order.order_items) {
@@ -183,14 +184,15 @@ export default function DeliveryView({ standalone }) {
   }
 
   // ── Delivery Route ────────────────────────────────────────────
-  // Only customers with orders today
-  const ordersCustomerIds = new Set(orders.map(o => o.customer_id))
+  // Filter orders by selected delivery run
+  const runOrders = orders.filter(o => (o.delivery_run || 1) === selectedRun)
+  const ordersCustomerIds = new Set(runOrders.map(o => o.customer_id))
   const routeCustomers = customers
     .filter(c => ordersCustomerIds.has(c.id) && (c.route_order || 99) < 99)
     .sort((a, b) => (a.route_order || 99) - (b.route_order || 99))
 
   function getOrderForCustomer(customerId) {
-    return orders.find(o => o.customer_id === customerId)
+    return runOrders.find(o => o.customer_id === customerId)
   }
 
   // ── Customer Delivery ─────────────────────────────────────────
@@ -333,22 +335,40 @@ export default function DeliveryView({ standalone }) {
             <div className="text-5xl mb-3">🚚</div>
             <h2 className="text-lg font-semibold text-gray-800 mb-1">Ready for delivery?</h2>
           </div>
-          <div className="mb-5">
+          <div className="mb-4">
             <label className="text-xs font-medium text-gray-500 mb-1 block">Delivery Date</label>
             <input type="date" value={selectedDate}
               onChange={e => { setSelectedDate(e.target.value); fetchData(e.target.value); sessionStorage.removeItem('deliveryScreen'); setScreen('start') }}
               className="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" />
           </div>
+          <div className="mb-5">
+            <label className="text-xs font-medium text-gray-500 mb-1 block">Delivery Run</label>
+            <div className="flex gap-2">
+              {[1,2,3,4].map(run => {
+                const runCount = orders.filter(o => (o.delivery_run || 1) === run && o.status !== 'delivered').length
+                if (run > 1 && runCount === 0) return null
+                return (
+                  <button key={run} onClick={() => setSelectedRun(run)}
+                    className={`flex-1 py-2.5 rounded-xl text-sm font-semibold transition-colors ${
+                      selectedRun === run ? 'bg-blue-600 text-white' : 'bg-blue-50 text-blue-700 hover:bg-blue-100'
+                    }`}>
+                    Run {run}
+                    {runCount > 0 && <span className="ml-1 text-xs opacity-70">({runCount})</span>}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
           {loading ? (
             <p className="text-center text-blue-500 text-sm">Loading...</p>
-          ) : orders.length === 0 ? (
-            <p className="text-center text-amber-600 text-sm">No baked orders found for {fmt(selectedDate)}.</p>
+          ) : runOrders.filter(o => o.status !== 'delivered').length === 0 ? (
+            <p className="text-center text-amber-600 text-sm">No orders for Run {selectedRun} on {fmt(selectedDate)}.</p>
           ) : (
             <>
-              <p className="text-center text-sm text-gray-400 mb-4">{orders.length} orders for {fmt(selectedDate)}</p>
+              <p className="text-center text-sm text-gray-400 mb-4">{runOrders.filter(o => o.status !== 'delivered').length} orders in Run {selectedRun}</p>
               <button onClick={() => setScreen('loading')}
                 className="w-full py-4 rounded-2xl bg-blue-600 text-white font-semibold text-base hover:bg-blue-700 transition-colors">
-                🏁 Start Loading Operations
+                🏁 Start Loading — Run {selectedRun}
               </button>
             </>
           )}
@@ -445,7 +465,7 @@ export default function DeliveryView({ standalone }) {
       <div className="max-w-2xl mx-auto px-4 py-6">
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h2 className="text-lg font-semibold text-blue-900">Delivery Route</h2>
+            <h2 className="text-lg font-semibold text-blue-900">Delivery Route — Run {selectedRun}</h2>
             <p className="text-sm text-blue-600 mt-0.5">{deliveredCount} of {routeCustomers.length} delivered</p>
           </div>
           <div className="text-right">
