@@ -95,30 +95,35 @@ export default function BakerView({ standalone }) {
 
     const affectedOrders = orders.filter(o => o.order_items.some(oi => oi.bakery_item_id === item.id))
     const allOrderItems = affectedOrders.flatMap(o => o.order_items.filter(oi => oi.bakery_item_id === item.id))
-    const totalOrdered = allOrderItems.reduce((s, oi) => s + oi.quantity, 0)
+
+    // Sort by route order priority — first customer gets full allocation
+    const sorted = [...allOrderItems].sort((a, b) => {
+      const orderA = affectedOrders.find(o => o.order_items.some(oi => oi.id === a.id))
+      const orderB = affectedOrders.find(o => o.order_items.some(oi => oi.id === b.id))
+      const custA = customers.find(c => c.id === orderA?.customer_id)
+      const custB = customers.find(c => c.id === orderB?.customer_id)
+      return (custA?.route_order || 99) - (custB?.route_order || 99)
+    })
+
+    // Allocate baked qty — fill each order fully before moving to next
     let remaining = baked
-
-    for (const oi of allOrderItems) {
-      const proportion = totalOrdered > 0 ? oi.quantity / totalOrdered : 0
-      const itemBaked = Math.min(oi.quantity, Math.round(proportion * baked))
-      remaining -= itemBaked
-      await supabase.from('order_items').update({ baked_qty: itemBaked }).eq('id', oi.id)
+    const allocations = {}
+    for (const oi of sorted) {
+      const allocate = Math.min(oi.quantity, remaining)
+      allocations[oi.id] = allocate
+      remaining -= allocate
     }
 
-    if (remaining !== 0 && allOrderItems.length > 0) {
-      const lastOi = allOrderItems[allOrderItems.length - 1]
-      const { data } = await supabase.from('order_items').select('baked_qty').eq('id', lastOi.id).single()
-      if (data) await supabase.from('order_items').update({ baked_qty: (data.baked_qty || 0) + remaining }).eq('id', lastOi.id)
-    }
+    // Save all baked_qty in parallel
+    await Promise.all(sorted.map(oi =>
+      supabase.from('order_items').update({ baked_qty: allocations[oi.id] }).eq('id', oi.id)
+    ))
 
-    // Only mark orders as bake_completed if ALL their items now have baked_qty set
+    // Mark orders as bake_completed if ALL their items now have baked_qty set
     const ordersToComplete = []
     for (const order of affectedOrders) {
-      // Re-fetch all order items for this order to check completion
       const { data: allItems } = await supabase
-        .from('order_items')
-        .select('baked_qty')
-        .eq('order_id', order.id)
+        .from('order_items').select('baked_qty').eq('order_id', order.id)
       const allBaked = allItems && allItems.every(oi => oi.baked_qty != null)
       if (allBaked) ordersToComplete.push(order.id)
     }
@@ -133,11 +138,12 @@ export default function BakerView({ standalone }) {
     setCompleted(prev => ({ ...prev, [item.id]: true }))
   }
 
+  const [showBakingComplete, setShowBakingComplete] = useState(false)
+
   async function markAllBaked() {
-    if (!confirm('Mark all orders as Bake Completed?')) return
+    // Save all quantities first
     const ids = orders.map(o => o.id)
     if (ids.length > 0) {
-      // Save all quantities
       for (const item of items) {
         const baked = parseInt(quantities[item.id]) || 0
         for (const oi of item.orderItems) {
@@ -294,10 +300,76 @@ export default function BakerView({ standalone }) {
               </tbody>
             </table>
           </div>
-          <button onClick={markAllBaked}
-            className="w-full py-3 rounded-xl bg-amber-100 text-amber-800 text-sm font-semibold hover:bg-amber-200">
-            ✅ Mark All as Baked
+          <button onClick={() => setShowBakingComplete(true)}
+            className="w-full py-4 rounded-xl bg-green-600 text-white text-base font-bold hover:bg-green-700 transition-colors">
+            ✅ Baking Complete
           </button>
+
+          {/* Baking Complete confirmation modal */}
+          {showBakingComplete && (() => {
+            const unbaked = items.filter(item => {
+              const baked = parseInt(quantities[item.id]) || 0
+              return baked === 0
+            })
+            const short = items.filter(item => {
+              const baked = parseInt(quantities[item.id]) || 0
+              return baked > 0 && baked < item.ordered
+            })
+            return (
+              <div className="fixed inset-0 bg-black/50 flex items-end justify-center z-50 px-0">
+                <div className="bg-white rounded-t-3xl w-full max-w-lg p-6 pb-10 shadow-2xl">
+                  <h3 className="text-lg font-bold text-gray-800 mb-1">Confirm Baking Complete</h3>
+                  <p className="text-sm text-gray-500 mb-5">Review before sending to delivery</p>
+
+                  {unbaked.length === 0 && short.length === 0 ? (
+                    <div className="bg-green-50 rounded-2xl p-4 text-center mb-5">
+                      <div className="text-2xl mb-1">🎉</div>
+                      <p className="text-green-700 font-semibold text-sm">All items baked as ordered!</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3 mb-5">
+                      {unbaked.length > 0 && (
+                        <div className="bg-red-50 border border-red-100 rounded-2xl p-4">
+                          <p className="text-xs font-bold text-red-700 uppercase tracking-wide mb-2">⚠️ Not Baked (qty = 0)</p>
+                          {unbaked.map(item => (
+                            <div key={item.id} className="flex justify-between text-sm py-1">
+                              <span className="text-red-800">{item.name}</span>
+                              <span className="text-red-600 font-semibold">0 / {item.ordered} ordered</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {short.length > 0 && (
+                        <div className="bg-amber-50 border border-amber-100 rounded-2xl p-4">
+                          <p className="text-xs font-bold text-amber-700 uppercase tracking-wide mb-2">Short Baked</p>
+                          {short.map(item => {
+                            const baked = parseInt(quantities[item.id]) || 0
+                            return (
+                              <div key={item.id} className="flex justify-between text-sm py-1">
+                                <span className="text-amber-800">{item.name}</span>
+                                <span className="text-amber-700 font-semibold">{baked} / {item.ordered} ordered</span>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  <div className="flex gap-3">
+                    <button onClick={() => setShowBakingComplete(false)}
+                      className="flex-1 py-3 rounded-xl border border-gray-200 text-gray-600 text-sm font-semibold hover:bg-gray-50">
+                      ← Edit Quantities
+                    </button>
+                    <button onClick={() => { setShowBakingComplete(false); markAllBaked() }}
+                      className="flex-1 py-3 rounded-xl bg-green-600 text-white text-sm font-bold hover:bg-green-700">
+                      Confirm & Complete
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )
+          })()}
         </div>
       )}
     </div>
