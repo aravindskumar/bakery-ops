@@ -242,64 +242,80 @@ export default function BakerView({ standalone }) {
           </button>
         </div>
       ) : (
-        // Item list for marking baked
+        // Item list for marking baked — grouped by category
         <div>
-          <div className="bg-white rounded-2xl border border-amber-100 overflow-hidden mb-4">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="bg-amber-50 text-amber-700 text-xs uppercase tracking-wide">
-                  <th className="text-left px-4 py-3 font-medium">Item</th>
-                  <th className="text-center px-4 py-3 font-medium">Ordered</th>
-                  <th className="text-center px-4 py-3 font-medium">Baked</th>
-                  <th className="px-4 py-3"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {items.map((item, i) => {
-                  const baked = parseInt(quantities[item.id]) || 0
-                  const isShort = quantities[item.id] !== '' && baked < item.ordered
-                  const isDone = completed[item.id]
-                  const isSaving = saving[item.id]
-                  return (
-                    <tr key={item.id} className={`border-t border-amber-50 ${isDone ? 'bg-green-50/40' : ''}`}>
-                      <td className="px-4 py-3 text-gray-800">
-                        {item.name}
-                        {isDone && <span className="ml-2 text-green-500 text-xs">✓</span>}
-                      </td>
-                      <td className="px-4 py-3 text-center text-gray-700">{item.ordered}</td>
-                      <td className="px-4 py-3 text-center">
-                        {isDone ? (
-                          <div className="flex items-center justify-center gap-2">
-                            <span className="text-green-700 font-semibold">{quantities[item.id]}</span>
-                            <button onClick={() => setCompleted(prev => ({ ...prev, [item.id]: false }))}
-                              className="text-xs text-gray-400 underline">edit</button>
-                          </div>
-                        ) : (
-                          <div className="flex flex-col items-center gap-1">
-                            <input type="number" min="0"
-                              value={quantities[item.id] ?? item.ordered}
-                              onChange={e => setQuantities(q => ({ ...q, [item.id]: e.target.value }))}
-                              className={`w-20 text-center px-2 py-1.5 rounded-lg border text-sm focus:outline-none focus:ring-2 ${
-                                isShort ? 'border-red-300 focus:ring-red-300 bg-red-50' : 'border-gray-200 focus:ring-amber-400'
-                              }`} />
-                            {isShort && <span className="text-xs text-red-500">⚠ Short by {item.ordered - baked}</span>}
-                          </div>
-                        )}
-                      </td>
-                      <td className="px-4 py-3 text-right">
-                        {!isDone && (
-                          <button onClick={() => markCompleted(item)} disabled={isSaving}
-                            className="px-4 py-1.5 rounded-xl bg-green-600 text-white text-xs font-semibold hover:bg-green-700 disabled:opacity-50">
-                            {isSaving ? '...' : 'Baked'}
-                          </button>
-                        )}
-                      </td>
+          {(() => {
+            const categoryMap = {}
+            for (const item of items) {
+              const cat = item.category || 'Other'
+              if (!categoryMap[cat]) categoryMap[cat] = []
+              categoryMap[cat].push(item)
+            }
+            const CATEGORY_ORDER = ['Bread', 'Pastry', 'Dry Cake', 'Wet Cake', 'Cookie', 'Pie', 'Other']
+            const sortedCats = Object.keys(categoryMap).sort((a, b) => {
+              const ai = CATEGORY_ORDER.indexOf(a); const bi = CATEGORY_ORDER.indexOf(b)
+              return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi)
+            })
+            return sortedCats.map(cat => (
+              <div key={cat} className="bg-white rounded-2xl border border-amber-100 overflow-hidden mb-3">
+                <div className="px-4 py-2 bg-amber-50 text-xs font-bold text-amber-700 uppercase tracking-wide">{cat}</div>
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-xs text-gray-400 uppercase border-b border-amber-50">
+                      <th className="text-left px-4 py-2 font-medium">Item</th>
+                      <th className="text-center px-4 py-2 font-medium">Ordered</th>
+                      <th className="text-center px-4 py-2 font-medium">Baked</th>
+                      <th className="px-4 py-2"></th>
                     </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
+                  </thead>
+                  <tbody>
+                    {categoryMap[cat].map((item, i) => {
+                      const baked = parseInt(quantities[item.id]) || 0
+                      const isShort = quantities[item.id] !== '' && baked < item.ordered
+                      const isDone = completed[item.id]
+                      const isSaving = saving[item.id]
+                      return (
+                        <tr key={item.id} className={`border-t border-amber-50 ${isDone ? 'bg-green-50/40' : ''}`}>
+                          <td className="px-4 py-3 text-gray-800">
+                            {item.name}
+                            {isDone && <span className="ml-2 text-green-500 text-xs">✓</span>}
+                          </td>
+                          <td className="px-4 py-3 text-center text-gray-700">{item.ordered}</td>
+                          <td className="px-4 py-3 text-center">
+                            {isDone ? (
+                              <div className="flex items-center justify-center gap-2">
+                                <span className="text-green-700 font-semibold">{quantities[item.id]}</span>
+                                <button onClick={() => setCompleted(prev => ({ ...prev, [item.id]: false }))}
+                                  className="text-xs text-gray-400 underline">edit</button>
+                              </div>
+                            ) : (
+                              <div className="flex flex-col items-center gap-1">
+                                <input type="number" min="0"
+                                  value={quantities[item.id] ?? item.ordered}
+                                  onChange={e => setQuantities(q => ({ ...q, [item.id]: e.target.value }))}
+                                  className={`w-20 text-center px-2 py-1.5 rounded-lg border text-sm focus:outline-none focus:ring-2 ${
+                                    isShort ? 'border-red-300 focus:ring-red-300 bg-red-50' : 'border-gray-200 focus:ring-amber-400'
+                                  }`} />
+                                {isShort && <span className="text-xs text-red-500">⚠ Short by {item.ordered - baked}</span>}
+                              </div>
+                            )}
+                          </td>
+                          <td className="px-4 py-3 text-right">
+                            {!isDone && (
+                              <button onClick={() => markCompleted(item)} disabled={isSaving}
+                                className="px-4 py-1.5 rounded-xl bg-green-600 text-white text-xs font-semibold hover:bg-green-700 disabled:opacity-50">
+                                {isSaving ? '...' : 'Baked'}
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            ))
+          })()}
           <button onClick={() => setShowBakingComplete(true)}
             className="w-full py-4 rounded-xl bg-green-600 text-white text-base font-bold hover:bg-green-700 transition-colors">
             ✅ Baking Complete
