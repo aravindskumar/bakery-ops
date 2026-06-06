@@ -83,7 +83,7 @@ export default function DeliveryView({ standalone }) {
       const lq = {}, dq = {}
       for (const order of enriched) {
         for (const oi of order.order_items) {
-          const bakedMax = oi.baked_qty != null ? oi.baked_qty : oi.quantity
+          const bakedMax = oi.baked_qty != null ? oi.baked_qty : (oi.loaded_qty != null ? oi.loaded_qty : oi.quantity)
           const alreadyDelivered = oi.delivered_qty ?? 0
           const remaining = Math.max(0, bakedMax - alreadyDelivered)
           lq[oi.id] = oi.loaded_qty != null ? Math.min(oi.loaded_qty, remaining) : remaining
@@ -111,7 +111,7 @@ export default function DeliveryView({ standalone }) {
     for (const oi of order.order_items) {
       const key = oi.bakery_item_id
       const alreadyDelivered = oi.delivered_qty ?? 0
-      const bakedMax = oi.baked_qty != null ? oi.baked_qty : oi.quantity
+      const bakedMax = oi.baked_qty != null ? oi.baked_qty : (oi.loaded_qty != null ? oi.loaded_qty : oi.quantity)
       const remainingToLoad = Math.max(0, bakedMax - alreadyDelivered)
       if (remainingToLoad === 0) continue
       if (!loadingSummary[key]) loadingSummary[key] = {
@@ -152,30 +152,35 @@ export default function DeliveryView({ standalone }) {
 
   async function confirmLoaded(row) {
     const totalLoaded = row.items.reduce((s, oi) => s + (parseInt(loadedQtys[oi.id]) || 0), 0)
-    // Allocate by route priority
     const allocatedQtys = allocateByRoute(row, totalLoaded)
     setLoadedQtys(allocatedQtys)
     const newLoaded = { ...loadedItems }
     row.items.forEach(oi => newLoaded[oi.id] = true)
     setLoadedItems(newLoaded)
-    // Save to DB
+    // Save to DB — also set baked_qty if null (loading proves it was baked)
     for (const oi of row.items) {
-      await supabase.from('order_items').update({ loaded_qty: allocatedQtys[oi.id] ?? 0 }).eq('id', oi.id)
+      const loadedQty = allocatedQtys[oi.id] ?? 0
+      const update = { loaded_qty: loadedQty }
+      if (oi.baked_qty == null) update.baked_qty = loadedQty
+      await supabase.from('order_items').update(update).eq('id', oi.id)
     }
   }
 
   async function completeLoading() {
     setSavingLoad(true)
-    // Save all loaded qtys with route priority allocation
     for (const row of loadingRows) {
       const totalLoaded = row.items.reduce((s, oi) => s + (parseInt(loadedQtys[oi.id]) || 0), 0)
       const allocatedQtys = allocateByRoute(row, totalLoaded)
       for (const oi of row.items) {
-        await supabase.from('order_items').update({ loaded_qty: allocatedQtys[oi.id] ?? 0 }).eq('id', oi.id)
+        const loadedQty = allocatedQtys[oi.id] ?? 0
+        const update = { loaded_qty: loadedQty }
+        if (oi.baked_qty == null) update.baked_qty = loadedQty
+        await supabase.from('order_items').update(update).eq('id', oi.id)
       }
     }
     setSavingLoad(false)
-    setScreen('delivery')  }
+    setScreen('delivery')
+  }
 
   // ── Delivery Route ────────────────────────────────────────────
   // Only customers with orders today
@@ -525,7 +530,7 @@ export default function DeliveryView({ standalone }) {
                   {cat}
                 </div>
                 {categoryMap[cat].map((oi, i) => {
-                  const bakedMax = oi.baked_qty != null ? oi.baked_qty : oi.quantity
+                  const bakedMax = oi.baked_qty != null ? oi.baked_qty : (oi.loaded_qty != null ? oi.loaded_qty : oi.quantity)
                   const maxDeliverable = oi.loaded_qty != null ? Math.min(oi.loaded_qty, bakedMax) : bakedMax
                   const currentVal = parseInt(deliveredQtys[oi.id] ?? maxDeliverable) || 0
                   // Build dropdown options 0..maxDeliverable
