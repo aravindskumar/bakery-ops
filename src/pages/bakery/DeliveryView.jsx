@@ -36,7 +36,7 @@ export default function DeliveryView({ standalone }) {
   const [savingDelivery, setSavingDelivery] = useState(false)
   const [cashAmount, setCashAmount] = useState('')
   const [deliveredCustomers, setDeliveredCustomers] = useState({})
-  const [cashSaved, setCashSaved] = useState({})
+  const [savingCash, setSavingCash] = useState(false)
   const [editingDelivery, setEditingDelivery] = useState({}) // customerId -> bool
   const today = getToday()
   const yesterday = getYesterday(selectedDate)
@@ -256,7 +256,8 @@ export default function DeliveryView({ standalone }) {
 
   async function saveCash() {
     const amount = parseFloat(cashAmount)
-    if (!amount || amount <= 0) return
+    if (!amount || amount <= 0 || savingCash) return
+    setSavingCash(true)
     const order = getOrderForCustomer(selectedCustomer.id)
 
     const { data: payment, error } = await supabase.from('payments').insert({
@@ -266,7 +267,7 @@ export default function DeliveryView({ standalone }) {
       notes: `Cash collected on delivery — Order ${order?.id?.slice(0, 8)}`
     }).select().single()
 
-    if (error || !payment) return
+    if (error || !payment) { setSavingCash(false); return }
 
     // Auto-allocate to oldest unpaid invoices
     const { data: openInvoices } = await supabase.from('invoices')
@@ -285,6 +286,7 @@ export default function DeliveryView({ standalone }) {
     }
 
     setCashSaved(prev => ({ ...prev, [selectedCustomer.id]: true }))
+    setSavingCash(false)
   }
 
   const deliveredCount = Object.values(deliveredCustomers).filter(Boolean).length
@@ -619,9 +621,9 @@ export default function DeliveryView({ standalone }) {
                       onChange={e => setCashAmount(e.target.value)}
                       className="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-green-400" />
                   </div>
-                  <button onClick={saveCash} disabled={!cashAmount || parseFloat(cashAmount) <= 0}
+                  <button onClick={saveCash} disabled={!cashAmount || parseFloat(cashAmount) <= 0 || savingCash}
                     className="self-end px-5 py-2.5 rounded-xl bg-green-600 text-white text-sm font-semibold hover:bg-green-700 disabled:opacity-40 transition-colors">
-                    Save
+                    {savingCash ? '...' : 'Save'}
                   </button>
                 </div>
                 <button onClick={() => setScreen('delivery')}
