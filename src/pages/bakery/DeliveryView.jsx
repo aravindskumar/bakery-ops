@@ -238,6 +238,20 @@ export default function DeliveryView({ standalone }) {
     return Object.values(itemMap).sort((a,b) => a.name.localeCompare(b.name))
   }
 
+  async function saveEditedDelivery() {
+    if (!selectedCustomer || !selectedOrder) return
+    setSavingDelivery(true)
+    try {
+      await Promise.all(selectedOrder.order_items.map(oi =>
+        supabase.from('order_items')
+          .update({ delivered_qty: parseInt(deliveredQtys[oi.id] ?? oi.quantity) || 0 })
+          .eq('id', oi.id)
+      ))
+      setEditingDelivery(prev => ({ ...prev, [selectedCustomer.id]: false }))
+    } catch (e) { alert('Error saving. Please try again.') }
+    setSavingDelivery(false)
+  }
+
   async function saveReturns() {
     if (!selectedCustomer) return
     setSavingReturns(true)
@@ -282,6 +296,8 @@ export default function DeliveryView({ standalone }) {
     setReturnScreen('done')
     setSavingReturns(false)
   }
+
+  function calcDeliveredAmount(order, dQtys) {
     // Calculate actual amount based on delivered qty × unit price
     return order.order_items.reduce((sum, oi) => {
       const qty = parseInt(dQtys[oi.id] ?? oi.quantity) || 0
@@ -552,7 +568,8 @@ export default function DeliveryView({ standalone }) {
             {deliveredCount === routeCustomers.length && routeCustomers.length > 0 && (
               <span className="text-xs text-green-600 font-semibold">All delivered! 🎉</span>
             )}
-          </div>        </div>
+          </div>
+        </div>
 
         <div className="bg-white rounded-2xl border border-blue-100 overflow-hidden">
           {routeCustomers.map((customer, i) => {
@@ -675,18 +692,7 @@ export default function DeliveryView({ standalone }) {
             {savingDelivery ? 'Saving...' : '✅ Mark as Delivered'}
           </button>
         ) : editingDelivery[selectedCustomer.id] ? (
-          <button onClick={async () => {
-            setSavingDelivery(true)
-            try {
-              await Promise.all(selectedOrder.order_items.map(oi =>
-                supabase.from('order_items')
-                  .update({ delivered_qty: parseInt(deliveredQtys[oi.id] ?? oi.quantity) || 0 })
-                  .eq('id', oi.id)
-              ))
-              setEditingDelivery(prev => ({ ...prev, [selectedCustomer.id]: false }))
-            } catch (e) { alert('Error saving. Please try again.') }
-            setSavingDelivery(false)
-          }} disabled={savingDelivery}
+          <button onClick={saveEditedDelivery} disabled={savingDelivery}
             className="w-full py-4 rounded-2xl bg-blue-600 text-white font-semibold text-base hover:bg-blue-700 disabled:opacity-50 transition-colors mb-4">
             {savingDelivery ? 'Saving...' : '💾 Save Updated Quantities'}
           </button>
