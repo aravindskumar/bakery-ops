@@ -153,9 +153,12 @@ export function buildBakeList(itemQtyMap, cookieSurplusFromYesterday = 0) {
     'Apple Pie',
     'Bhagsu Cake',
   ]
-  // Chocolate Big
+  // Chocolate Cake (standalone)
   const chocBig = get('Chocolate Cake Big') || get('Chocolate Big')
   if (chocBig > 0) groups.push({ group: 'Chocolate Big', total: chocBig, items: [] })
+
+  const chocCake = get('Chocolate Cake')
+  if (chocCake > 0) groups.push({ group: 'Chocolate Cake', total: chocCake, items: [] })
 
   const biscoff = get('Lotus Biscoff Cheesecake Small')
   if (biscoff > 0) groups.push({ group: 'Biscoff', total: biscoff, items: [] })
