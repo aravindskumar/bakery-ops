@@ -46,6 +46,7 @@ export default function Orders() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [orderDate] = useState(getToday())
+  const [viewDate, setViewDate] = useState(getToday())
   const [deliveryDate, setDeliveryDate] = useState(getTomorrow())
   const [futureDeliveryDate, setFutureDeliveryDate] = useState('')
   const [deliveryDateManual, setDeliveryDateManual] = useState(false)
@@ -54,7 +55,9 @@ export default function Orders() {
   const [startingBake, setStartingBake] = useState(false)
   const [showFutureCustomerPicker, setShowFutureCustomerPicker] = useState(false)
 
-  useEffect(() => { fetchAll() }, [orderDate])
+  const isToday = viewDate === orderDate
+
+  useEffect(() => { fetchAll() }, [viewDate])
 
   async function fetchAll() {
     setLoading(true)
@@ -68,7 +71,7 @@ export default function Orders() {
       // Today's regular orders + future orders whose bake date is today (delivery_date = tomorrow)
       supabase.from('orders')
         .select('*, customers(name, type), order_items(*, bakery_items(name, unit, category))')
-        .or(`order_date.eq.${orderDate},and(order_type.eq.future,order_date.eq.${orderDate})`)
+        .or(`order_date.eq.${viewDate},and(order_type.eq.future,order_date.eq.${viewDate})`)
         .order('created_at'),
       // Future orders not yet due for baking (delivery_date > tomorrow)
       supabase.from('orders')
@@ -166,6 +169,11 @@ export default function Orders() {
       const { error: iErr } = await supabase.from('order_items').insert(
         activeLines.map(l => ({ order_id: orderId, bakery_item_id: l.bakery_item_id, quantity: l.quantity, unit_price: l.unit_price }))
       )
+      if (iErr) {
+        // Items failed — order exists but is empty. Open it for editing so admin can retry.
+        setEditingOrder(orderId)
+        throw new Error('Items failed to save. Please try saving again — your order has been kept.')
+      }
       if (iErr) throw iErr
       setShowForm(false); fetchAll()
     } catch (e) { setError(e.message) }
@@ -195,14 +203,27 @@ export default function Orders() {
     if (!confirm(`Start baking ${draftOrders.length} order(s) for delivery on ${formatDate(autoDelivery)}? Baker will see the bake list now.`)) return
     setStartingBake(true)
     if (!deliveryDateManual) setDeliveryDate(autoDelivery)
+    const updateData = {
+      status: 'sent_to_baker',
+      sent_to_baker_at: new Date().toISOString(),
+      baking_started_at: new Date().toISOString(),
+      delivery_date: autoDelivery
+    }
     await supabase.from('orders')
-      .update({
-        status: 'sent_to_baker',
-        sent_to_baker_at: new Date().toISOString(),
-        baking_started_at: new Date().toISOString(),
-        delivery_date: autoDelivery
-      })
+      .update(updateData)
       .in('id', draftOrders.map(o => o.id))
+
+    // Verify all orders were updated — retry any that are still draft
+    const { data: stillDraft } = await supabase.from('orders')
+      .select('id')
+      .in('id', draftOrders.map(o => o.id))
+      .eq('status', 'draft')
+    if (stillDraft && stillDraft.length > 0) {
+      // Retry failed ones individually
+      for (const ord of stillDraft) {
+        await supabase.from('orders').update(updateData).eq('id', ord.id)
+      }
+    }
     setStartingBake(false)
     fetchAll()
   }
@@ -288,23 +309,35 @@ export default function Orders() {
         </div>
         <div className="flex flex-col items-end gap-2">
           <div className="flex items-center gap-2">
-            <span className="text-gray-400 text-xs">Order date</span>
-            <span className="font-medium text-gray-700 bg-gray-100 px-2 py-1 rounded-lg text-xs">{formatDate(orderDate)}</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="text-gray-400 text-xs">Delivery date</span>
-            <input type="date" value={deliveryDate} onChange={e => { setDeliveryDate(e.target.value); setDeliveryDateManual(true) }}
+            <span className="text-gray-400 text-xs">Viewing</span>
+            <input type="date" value={viewDate} onChange={e => setViewDate(e.target.value)}
               className="px-2 py-1 rounded-lg border border-amber-200 text-xs focus:outline-none focus:ring-2 focus:ring-amber-400 bg-white font-medium text-amber-800" />
+            {!isToday && <button onClick={() => setViewDate(orderDate)} className="text-xs text-amber-600 underline">Today</button>}
           </div>
-          {deliveryDateManual && <button onClick={() => { setDeliveryDateManual(false); setDeliveryDate(getTomorrow()) }} className="text-xs text-gray-400 underline">reset to auto</button>}
+          {isToday && (
+            <>
+              <div className="flex items-center gap-2">
+                <span className="text-gray-400 text-xs">Delivery date</span>
+                <input type="date" value={deliveryDate} onChange={e => { setDeliveryDate(e.target.value); setDeliveryDateManual(true) }}
+                  className="px-2 py-1 rounded-lg border border-amber-200 text-xs focus:outline-none focus:ring-2 focus:ring-amber-400 bg-white font-medium text-amber-800" />
+              </div>
+              {deliveryDateManual && <button onClick={() => { setDeliveryDateManual(false); setDeliveryDate(getTomorrow()) }} className="text-xs text-gray-400 underline">reset to auto</button>}
+            </>
+          )}
         </div>
       </div>
+
+      {!isToday && (
+        <div className="bg-amber-50 border border-amber-100 rounded-2xl px-4 py-3 mb-4 text-sm text-amber-700">
+          📅 Viewing past orders for {formatDate(viewDate)} — read only
+        </div>
+      )}
 
       {loading ? <div className="text-center py-12 text-amber-600">Loading...</div> : (
         <div className="space-y-4">
 
-          {/* Pending customers — blocked after baking started */}
-          {pendingCustomers.length > 0 && (
+          {/* Pending customers — only show for today */}
+          {isToday && pendingCustomers.length > 0 && (
             <div className="bg-white rounded-2xl border border-amber-100 p-4">
               <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Awaiting orders ({pendingCustomers.length})</p>
               {bakingStarted ? (
@@ -324,8 +357,8 @@ export default function Orders() {
             </div>
           )}
 
-          {/* Future special orders */}
-          {!bakingStarted && (
+          {/* Future special orders — only show for today */}
+          {isToday && !bakingStarted && (
             <div className="bg-white rounded-2xl border border-purple-100 p-4">
               <div className="flex items-center justify-between mb-3">
                 <div>
@@ -378,8 +411,8 @@ export default function Orders() {
             </div>
           )}
 
-          {/* Draft orders + bake summary + Start Baking */}
-          {draftOrders.length > 0 && !bakingStarted && (
+          {/* Draft orders + bake summary + Start Baking — today only */}
+          {isToday && draftOrders.length > 0 && !bakingStarted && (
             <>
               <div className="bg-white rounded-2xl border border-amber-100 overflow-hidden">
                 <div className="px-4 py-3 bg-amber-50 text-xs font-semibold text-amber-700 uppercase tracking-wide">
