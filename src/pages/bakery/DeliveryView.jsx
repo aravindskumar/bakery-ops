@@ -17,23 +17,12 @@ function fmt(d) {
 export default function DeliveryView({ standalone }) {
   const { signOut } = useAuth()
   // Persist screen in sessionStorage so refresh doesn't reset to start
-  const [screen, setScreenState] = useState('start')
+  const [screen, setScreenState] = useState(() => {
+    return sessionStorage.getItem('deliveryScreen') || 'start'
+  })
   function setScreen(s) {
     sessionStorage.setItem('deliveryScreen', s)
     setScreenState(s)
-  }
-  function deriveScreen(enrichedOrders) {
-    // If any orders are delivered → delivery route
-    const hasDelivered = enrichedOrders.some(o => o.status === 'delivered')
-    if (hasDelivered) { setScreenState('delivery'); return }
-    // If all baked items have loaded_qty set → delivery route
-    const allLoaded = enrichedOrders.every(o =>
-      o.order_items.every(oi => oi.loaded_qty != null)
-    )
-    if (allLoaded && enrichedOrders.length > 0) { setScreenState('delivery'); return }
-    // Otherwise check sessionStorage
-    const saved = sessionStorage.getItem('deliveryScreen')
-    if (saved) setScreenState(saved)
   }
   const [selectedDate, setSelectedDate] = useState(getToday())
   const [orders, setOrders] = useState([])
@@ -50,13 +39,6 @@ export default function DeliveryView({ standalone }) {
   const [savingCash, setSavingCash] = useState(false)
   const [editingDelivery, setEditingDelivery] = useState({}) // customerId -> bool
   const [selectedRun, setSelectedRun] = useState(1)
-  // Returns
-  const RETURN_CUSTOMERS = ['Himalayan Tea Stall', 'Krishna General Store', 'UK Shoppe']
-  const [returnScreen, setReturnScreen] = useState(null) // null | 'ask' | 'entry' | 'done'
-  const [returnItems, setReturnItems] = useState([]) // [{bakery_item_id, name, unit_price, qty}]
-  const [returnQtys, setReturnQtys] = useState({}) // bakery_item_id -> qty
-  const [savingReturns, setSavingReturns] = useState(false)
-  const [previousDeliveries, setPreviousDeliveries] = useState([]) // for return item list
   const today = getToday()
   const yesterday = getYesterday(selectedDate)
 
@@ -117,8 +99,6 @@ export default function DeliveryView({ standalone }) {
         if (order.status === 'delivered' && (order.delivery_run || 1) === selectedRun) dc[order.customer_id] = true
       }
       setDeliveredCustomers(dc)
-      // Auto-derive screen from data so refresh never gets stuck
-      deriveScreen(enriched)
     }
     if (c) setCustomers(c)
     setLoading(false)
@@ -230,85 +210,7 @@ export default function DeliveryView({ standalone }) {
     setScreen('customer')
   }
 
-  async function fetchPreviousDeliveries(customerId) {
-    const { data } = await supabase
-      .from('order_items')
-      .select('bakery_item_id, unit_price, bakery_items(name), orders!inner(customer_id, status)')
-      .eq('orders.customer_id', customerId)
-      .eq('orders.status', 'delivered')
-    if (!data) return []
-    // Unique items, use most recent unit_price
-    const itemMap = {}
-    for (const oi of data) {
-      if (!itemMap[oi.bakery_item_id]) {
-        itemMap[oi.bakery_item_id] = {
-          bakery_item_id: oi.bakery_item_id,
-          name: oi.bakery_items?.name,
-          unit_price: oi.unit_price
-        }
-      }
-    }
-    return Object.values(itemMap).sort((a,b) => a.name.localeCompare(b.name))
-  }
-
-  async function saveEditedDelivery() {
-    if (!selectedCustomer || !selectedOrder) return
-    setSavingDelivery(true)
-    try {
-      await Promise.all(selectedOrder.order_items.map(oi =>
-        supabase.from('order_items')
-          .update({ delivered_qty: parseInt(deliveredQtys[oi.id] ?? oi.quantity) || 0 })
-          .eq('id', oi.id)
-      ))
-      setEditingDelivery(prev => ({ ...prev, [selectedCustomer.id]: false }))
-    } catch (e) { alert('Error saving. Please try again.') }
-    setSavingDelivery(false)
-  }
-
-  async function saveReturns() {
-    if (!selectedCustomer) return
-    setSavingReturns(true)
-    const isLedgerCredit = selectedCustomer.name === 'Himalayan Tea Stall'
-    const creditType = isLedgerCredit ? 'ledger_credit' : 'cash_deduction'
-
-    const returnEntries = returnItems
-      .filter(item => parseInt(returnQtys[item.bakery_item_id] || 0) > 0)
-      .map(item => ({
-        customer_id: selectedCustomer.id,
-        return_date: selectedDate,
-        bakery_item_id: item.bakery_item_id,
-        quantity: parseInt(returnQtys[item.bakery_item_id]),
-        unit_price: item.unit_price,
-        credit_amount: parseInt(returnQtys[item.bakery_item_id]) * item.unit_price,
-        credit_type: creditType,
-        notes: `Return on delivery - ${selectedCustomer.name}`
-      }))
-
-    if (returnEntries.length > 0) {
-      await supabase.from('returns').insert(returnEntries)
-
-      // For ledger credit (Himalayan Tea Stall) — create a negative payment to show credit
-      if (isLedgerCredit) {
-        const totalCredit = returnEntries.reduce((s, r) => s + r.credit_amount, 0)
-        await supabase.from('payments').insert({
-          customer_id: selectedCustomer.id,
-          payment_date: selectedDate,
-          amount: -totalCredit,
-          notes: `Returns credit — ${returnEntries.map(r => `${r.quantity} ${returnItems.find(i => i.bakery_item_id === r.bakery_item_id)?.name}`).join(', ')}`
-        })
-      }
-
-      // For cash deduction — reduce cash amount
-      if (!isLedgerCredit) {
-        const totalDeduction = returnEntries.reduce((s, r) => s + r.credit_amount, 0)
-        const newCash = Math.max(0, parseFloat(cashAmount || 0) - totalDeduction)
-        setCashAmount(newCash.toFixed(2))
-      }
-    }
-
-    setReturnScreen('done')
-    setSavingReturns(false)
-  }
+  function calcDeliveredAmount(order, dQtys) {
     // Calculate actual amount based on delivered qty × unit price
     return order.order_items.reduce((sum, oi) => {
       const qty = parseInt(dQtys[oi.id] ?? oi.quantity) || 0
@@ -351,14 +253,6 @@ export default function DeliveryView({ standalone }) {
       const autoAmount = getAutoPaymentAmount(selectedCustomer, order, deliveredQtys)
       setCashAmount(autoAmount)
       setDeliveredCustomers(prev => ({ ...prev, [selectedCustomer.id]: true }))
-
-      // Show returns screen for eligible customers
-      if (RETURN_CUSTOMERS.includes(selectedCustomer.name)) {
-        const prevDeliveries = await fetchPreviousDeliveries(selectedCustomer.id)
-        setReturnItems(prevDeliveries)
-        setReturnQtys({})
-        setReturnScreen('ask')
-      }
     } catch (e) {
       console.error('markDelivered error:', e)
       alert('Error saving delivery. Please try again.')
@@ -498,79 +392,64 @@ export default function DeliveryView({ standalone }) {
           </div>
         </div>
 
-        {(() => {
-          const CATEGORY_ORDER = ['Bread', 'Pastry', 'Dry Cake', 'Wet Cake', 'Cookie', 'Pie', 'Other']
-          const catMap = {}
-          for (const row of loadingRows) {
-            const cat = row.category || 'Other'
-            if (!catMap[cat]) catMap[cat] = []
-            catMap[cat].push(row)
-          }
-          const sortedCats = Object.keys(catMap).sort((a, b) => {
-            const ai = CATEGORY_ORDER.indexOf(a); const bi = CATEGORY_ORDER.indexOf(b)
-            return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi)
-          })
-          const updateTotal = (row, maxLoadable, newVal) => {
-            const val = Math.max(0, Math.min(newVal, maxLoadable))
-            const newQtys = { ...loadedQtys }
-            row.items.forEach((oi, idx) => { newQtys[oi.id] = idx === 0 ? val : 0 })
-            setLoadedQtys(newQtys)
-          }
-          return sortedCats.map(cat => (
-            <div key={cat} className="mb-4">
-              <div className="px-1 py-1.5 text-xs font-bold text-blue-700 uppercase tracking-wide mb-2">{cat}</div>
-              <div className="space-y-3">
-                {catMap[cat].map((row, i) => {
-                  const totalLoaded = row.items.reduce((s, oi) => s + (parseInt(loadedQtys[oi.id]) || 0), 0)
-                  const isLoaded = row.items.every(oi => loadedItems[oi.id])
-                  const maxLoadable = row.totalBakedAll
-                  const isShort = row.totalBakedAll < row.totalOrdered
-                  const overBaked = totalLoaded > maxLoadable
-                  return (
-                    <div key={i} className={`bg-white rounded-2xl border px-4 py-4 ${isLoaded ? 'border-green-200 bg-green-50/30' : 'border-blue-100'}`}>
-                      <div className="flex items-center justify-between mb-3">
-                        <div>
-                          <span className="font-semibold text-gray-800">{row.name}</span>
-                          {isLoaded && <span className="ml-2 text-green-500 text-sm">✓ Loaded</span>}
-                        </div>
-                        <div className="text-right space-y-0.5">
-                          <div className="text-xs text-gray-400">Ordered: <span className="font-semibold text-gray-700">{row.totalOrdered}</span></div>
-                          <div className={`text-xs ${isShort ? 'text-orange-500 font-semibold' : 'text-gray-400'}`}>
-                            Baked: <span className="font-semibold">{row.totalBakedAll}</span>
-                            {isShort && <span className="ml-1">(short by {row.totalOrdered - row.totalBakedAll})</span>}
-                          </div>
-                        </div>
-                      </div>
-                      {isLoaded ? (
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm text-green-700 font-semibold">{totalLoaded} loaded{isShort ? ` (short by ${row.totalOrdered - totalLoaded})` : ''}</span>
-                          <button onClick={() => setLoadedItems(prev => { const n = {...prev}; row.items.forEach(oi => delete n[oi.id]); return n })}
-                            className="text-xs text-gray-400 underline underline-offset-2">edit</button>
-                        </div>
-                      ) : (
-                        <div className="flex items-center gap-3">
-                          <button onClick={() => updateTotal(row, maxLoadable, totalLoaded - 1)}
-                            className="w-12 h-12 rounded-xl bg-gray-100 text-gray-700 text-2xl font-light hover:bg-gray-200 active:bg-gray-300 flex items-center justify-center transition-colors">−</button>
-                          <div className="flex-1 text-center">
-                            <div className="text-3xl font-bold text-gray-800">{totalLoaded}</div>
-                            {isShort && !overBaked && <div className="text-xs text-orange-500 mt-0.5">short by {row.totalOrdered - totalLoaded}</div>}
-                            {overBaked && <div className="text-xs text-red-500 mt-0.5">max {maxLoadable} (baked)</div>}
-                          </div>
-                          <button onClick={() => updateTotal(row, maxLoadable, totalLoaded + 1)}
-                            className="w-12 h-12 rounded-xl bg-blue-100 text-blue-700 text-2xl font-light hover:bg-blue-200 active:bg-blue-300 flex items-center justify-center transition-colors">+</button>
-                          <button onClick={() => confirmLoaded(row)}
-                            className="w-20 h-12 rounded-xl bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 active:bg-blue-800 transition-colors">
-                            Loaded
-                          </button>
-                        </div>
-                      )}
+        <div className="space-y-3 mb-4">
+          {loadingRows.map((row, i) => {
+            const totalLoaded = row.items.reduce((s, oi) => s + (parseInt(loadedQtys[oi.id]) || 0), 0)
+            const isLoaded = row.items.every(oi => loadedItems[oi.id])
+            const maxLoadable = row.totalBakedAll // cap at baked qty
+            const isShort = row.totalBakedAll < row.totalOrdered
+            const overBaked = totalLoaded > maxLoadable
+
+            function updateTotal(newVal) {
+              const val = Math.max(0, Math.min(newVal, maxLoadable))
+              const newQtys = { ...loadedQtys }
+              row.items.forEach((oi, idx) => { newQtys[oi.id] = idx === 0 ? val : 0 })
+              setLoadedQtys(newQtys)
+            }
+
+            return (
+              <div key={i} className={`bg-white rounded-2xl border px-4 py-4 ${isLoaded ? 'border-green-200 bg-green-50/30' : 'border-blue-100'}`}>
+                <div className="flex items-center justify-between mb-3">
+                  <div>
+                    <span className="font-semibold text-gray-800">{row.name}</span>
+                    {isLoaded && <span className="ml-2 text-green-500 text-sm">✓ Loaded</span>}
+                  </div>
+                  <div className="text-right space-y-0.5">
+                    <div className="text-xs text-gray-400">Ordered: <span className="font-semibold text-gray-700">{row.totalOrdered}</span></div>
+                    <div className={`text-xs ${isShort ? 'text-orange-500 font-semibold' : 'text-gray-400'}`}>
+                      Baked: <span className="font-semibold">{row.totalBakedAll}</span>
+                      {isShort && <span className="ml-1">(short by {row.totalOrdered - row.totalBakedAll})</span>}
                     </div>
-                  )
-                })}
+                  </div>
+                </div>
+
+                {isLoaded ? (
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-green-700 font-semibold">{totalLoaded} loaded{isShort ? ` (short by ${row.totalOrdered - totalLoaded})` : ''}</span>
+                    <button onClick={() => setLoadedItems(prev => { const n = {...prev}; row.items.forEach(oi => delete n[oi.id]); return n })}
+                      className="text-xs text-gray-400 underline underline-offset-2">edit</button>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-3">
+                    <button onClick={() => updateTotal(totalLoaded - 1)}
+                      className="w-12 h-12 rounded-xl bg-gray-100 text-gray-700 text-2xl font-light hover:bg-gray-200 active:bg-gray-300 flex items-center justify-center transition-colors">−</button>
+                    <div className="flex-1 text-center">
+                      <div className="text-3xl font-bold text-gray-800">{totalLoaded}</div>
+                      {isShort && !overBaked && <div className="text-xs text-orange-500 mt-0.5">short by {row.totalOrdered - totalLoaded}</div>}
+                      {overBaked && <div className="text-xs text-red-500 mt-0.5">max {maxLoadable} (baked)</div>}
+                    </div>
+                    <button onClick={() => updateTotal(totalLoaded + 1)}
+                      className="w-12 h-12 rounded-xl bg-blue-100 text-blue-700 text-2xl font-light hover:bg-blue-200 active:bg-blue-300 flex items-center justify-center transition-colors">+</button>
+                    <button onClick={() => confirmLoaded(row)}
+                      className="w-20 h-12 rounded-xl bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 active:bg-blue-800 transition-colors">
+                      Loaded
+                    </button>
+                  </div>
+                )}
               </div>
-            </div>
-          ))
-        })()}
+            )
+          })}
+        </div>
         <button onClick={completeLoading} disabled={savingLoad}
           className="w-full py-4 rounded-2xl bg-green-600 text-white font-semibold text-base hover:bg-green-700 disabled:opacity-50 transition-colors">
           {savingLoad ? 'Saving...' : '✅ Loading Complete — Start Delivery'}
@@ -717,7 +596,18 @@ export default function DeliveryView({ standalone }) {
             {savingDelivery ? 'Saving...' : '✅ Mark as Delivered'}
           </button>
         ) : editingDelivery[selectedCustomer.id] ? (
-          <button onClick={saveEditedDelivery} disabled={savingDelivery}
+          <button onClick={async () => {
+            setSavingDelivery(true)
+            try {
+              await Promise.all(selectedOrder.order_items.map(oi =>
+                supabase.from('order_items')
+                  .update({ delivered_qty: parseInt(deliveredQtys[oi.id] ?? oi.quantity) || 0 })
+                  .eq('id', oi.id)
+              ))
+              setEditingDelivery(prev => ({ ...prev, [selectedCustomer.id]: false }))
+            } catch (e) { alert('Error saving. Please try again.') }
+            setSavingDelivery(false)
+          }} disabled={savingDelivery}
             className="w-full py-4 rounded-2xl bg-blue-600 text-white font-semibold text-base hover:bg-blue-700 disabled:opacity-50 transition-colors mb-4">
             {savingDelivery ? 'Saving...' : '💾 Save Updated Quantities'}
           </button>
@@ -728,82 +618,7 @@ export default function DeliveryView({ standalone }) {
           </button>
         )}
 
-        {/* Returns flow — for eligible customers after delivery */}
-        {isDelivered && RETURN_CUSTOMERS.includes(selectedCustomer.name) && returnScreen !== null && (
-          <div className="bg-white rounded-2xl border border-orange-100 p-4 mb-4">
-            {returnScreen === 'ask' && (
-              <>
-                <p className="text-sm font-semibold text-gray-700 mb-1">Any returns today?</p>
-                <p className="text-xs text-gray-400 mb-4">
-                  {selectedCustomer.name === 'Himalayan Tea Stall'
-                    ? 'Returns will be credited to their account'
-                    : 'Returns will be deducted from cash to collect'}
-                </p>
-                <div className="flex gap-3">
-                  <button onClick={async () => {
-                    setReturnScreen('entry')
-                  }} className="flex-1 py-3 rounded-xl bg-orange-500 text-white text-sm font-semibold hover:bg-orange-600 transition-colors">
-                    📦 Yes — Enter Returns
-                  </button>
-                  <button onClick={() => setReturnScreen('done')}
-                    className="flex-1 py-3 rounded-xl bg-gray-100 text-gray-600 text-sm font-semibold hover:bg-gray-200 transition-colors">
-                    No Returns
-                  </button>
-                </div>
-              </>
-            )}
-
-            {returnScreen === 'entry' && (
-              <>
-                <p className="text-sm font-semibold text-gray-700 mb-3">Enter return quantities</p>
-                <div className="space-y-2 mb-4 max-h-60 overflow-y-auto">
-                  {returnItems.map(item => (
-                    <div key={item.bakery_item_id} className="flex items-center justify-between">
-                      <div className="flex-1">
-                        <div className="text-sm text-gray-800">{item.name}</div>
-                        <div className="text-xs text-gray-400">₹{item.unit_price} each</div>
-                      </div>
-                      <input type="number" min="0"
-                        value={returnQtys[item.bakery_item_id] || 0}
-                        onChange={e => setReturnQtys(q => ({ ...q, [item.bakery_item_id]: parseInt(e.target.value) || 0 }))}
-                        className="w-16 text-center px-2 py-1.5 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 ml-3" />
-                    </div>
-                  ))}
-                </div>
-                {/* Return total */}
-                {returnItems.reduce((s, item) => s + (parseInt(returnQtys[item.bakery_item_id] || 0) * item.unit_price), 0) > 0 && (
-                  <div className="bg-orange-50 rounded-xl px-4 py-2 mb-4 flex justify-between">
-                    <span className="text-sm text-orange-700">Return credit</span>
-                    <span className="font-mono font-semibold text-orange-700">
-                      ₹{returnItems.reduce((s, item) => s + (parseInt(returnQtys[item.bakery_item_id] || 0) * item.unit_price), 0).toFixed(2)}
-                    </span>
-                  </div>
-                )}
-                <div className="flex gap-3">
-                  <button onClick={() => setReturnScreen('ask')}
-                    className="flex-1 py-2.5 rounded-xl border border-gray-200 text-gray-500 text-sm font-semibold">
-                    ← Back
-                  </button>
-                  <button onClick={saveReturns} disabled={savingReturns}
-                    className="flex-1 py-2.5 rounded-xl bg-orange-500 text-white text-sm font-semibold hover:bg-orange-600 disabled:opacity-50">
-                    {savingReturns ? 'Saving...' : 'Save Returns'}
-                  </button>
-                </div>
-              </>
-            )}
-
-            {returnScreen === 'done' && (
-              <div className="flex items-center gap-2">
-                <span className="text-orange-400">✓</span>
-                <span className="text-sm text-gray-600">
-                  {returnItems.some(i => parseInt(returnQtys[i.bakery_item_id] || 0) > 0)
-                    ? `Returns recorded — ${selectedCustomer.name === 'Himalayan Tea Stall' ? 'credited to account' : 'deducted from cash'}`
-                    : 'No returns today'}
-                </span>
-              </div>
-            )}
-          </div>
-        )}
+        {/* Cash collection — only for 0 and 1 day payment terms */}
         {isDelivered && (selectedCustomer.payment_days === 0 || selectedCustomer.payment_days === 1) && (
           <div className="bg-white rounded-2xl border border-green-100 p-4 mb-4">
             <div className="flex items-center gap-2 mb-3">
