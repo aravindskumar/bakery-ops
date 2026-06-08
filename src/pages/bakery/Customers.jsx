@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 
 const TYPES = ['cafe', 'retail', 'restaurant', 'other']
-const empty = { name: '', contact_name: '', phone: '', address: '', type: 'cafe', has_custom_pricing: false, is_active: true, notes: '' }
+const empty = { name: '', contact_name: '', phone: '', address: '', type: 'cafe', has_custom_pricing: false, is_active: true, notes: '', payment_days: 0 }
 
 export default function Customers() {
   const [customers, setCustomers] = useState([])
@@ -64,7 +64,7 @@ export default function Customers() {
   }
 
   function startEdit(c) {
-    setForm({ name: c.name, contact_name: c.contact_name || '', phone: c.phone || '', address: c.address || '', type: c.type, has_custom_pricing: c.has_custom_pricing, is_active: c.is_active, notes: c.notes || '' })
+    setForm({ name: c.name, contact_name: c.contact_name || '', phone: c.phone || '', address: c.address || '', type: c.type, has_custom_pricing: c.has_custom_pricing, is_active: c.is_active, notes: c.notes || '', payment_days: c.payment_days || 0 })
     setEditing(c.id); setShowForm(true)
   }
 
@@ -105,6 +105,7 @@ export default function Customers() {
                   <th className="text-left px-4 py-3 font-medium">Type</th>
                   <th className="text-left px-4 py-3 font-medium">Contact</th>
                   <th className="text-left px-4 py-3 font-medium">Phone</th>
+                  <th className="text-center px-4 py-3 font-medium">Payment</th>
                   <th className="text-center px-4 py-3 font-medium">Pricing</th>
                   <th className="text-center px-4 py-3 font-medium">Status</th>
                   <th className="px-4 py-3"></th>
@@ -117,6 +118,9 @@ export default function Customers() {
                     <td className="px-4 py-3"><span className="capitalize text-gray-500">{c.type}</span></td>
                     <td className="px-4 py-3 text-gray-500">{c.contact_name || '—'}</td>
                     <td className="px-4 py-3 text-gray-500">{c.phone || '—'}</td>
+                    <td className="px-4 py-3 text-center text-gray-500 text-xs">
+                      {c.payment_days === 0 ? 'COD' : `${c.payment_days} days`}
+                    </td>
                     <td className="px-4 py-3 text-center">
                       {c.has_custom_pricing
                         ? <button onClick={() => openPricing(c)} className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full font-medium hover:bg-purple-200">Custom ✎</button>
@@ -180,6 +184,14 @@ export default function Customers() {
                 <label className="text-xs font-medium text-gray-500 mb-1 block">Notes</label>
                 <input value={form.notes} onChange={e => setForm({...form, notes: e.target.value})} placeholder="Any special instructions..."
                   className="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400" />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-gray-500 mb-1 block">Payment Terms (days)</label>
+                <div className="flex items-center gap-3">
+                  <input type="number" min="0" value={form.payment_days} onChange={e => setForm({...form, payment_days: parseInt(e.target.value) || 0})}
+                    className="w-28 px-3 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400" />
+                  <span className="text-sm text-gray-400">{form.payment_days === 0 ? 'Cash on delivery' : `${form.payment_days} days credit`}</span>
+                </div>
               </div>
               <div className="flex gap-4">
                 <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
