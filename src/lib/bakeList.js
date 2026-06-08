@@ -161,7 +161,7 @@ export function buildBakeList(itemQtyMap, cookieSurplusFromYesterday = 0) {
   if (chocCake > 0) groups.push({ group: 'Chocolate Cake', total: chocCake, items: [] })
 
   const biscoff = get('Lotus Biscoff Cheesecake Small')
-  if (biscoff > 0) groups.push({ group: 'Biscoff', total: biscoff, items: [] })
+  if (biscoff > 0) groups.push({ group: 'Lotus Biscoff Cheesecake', total: biscoff, items: [] })
 
   const banoffee = get('Banoffee')
   if (banoffee > 0) groups.push({ group: 'Banoffee', total: banoffee, items: [] })
