@@ -64,7 +64,9 @@ export default function PastOrders() {
         <div className="bg-white rounded-2xl border border-amber-100 overflow-hidden">
           {orders.map((order, i) => {
             const cfg = STATUS_CONFIG[order.status] || STATUS_CONFIG.draft
-            const deliveredAmt = (order.order_items || []).reduce((s, oi) => s + (oi.delivered_qty ?? oi.quantity) * oi.unit_price, 0)
+            const deliveredAmt = order.status === 'delivered'
+          ? (order.order_items || []).reduce((s, oi) => s + (oi.delivered_qty ?? oi.quantity) * oi.unit_price, 0)
+          : 0
             const orderedAmt = parseFloat(order.total_amount || 0)
             const isExpanded = expandedOrder === order.id
             return (
@@ -104,7 +106,7 @@ export default function PastOrders() {
                       </thead>
                       <tbody>
                         {order.order_items.map(oi => {
-                          const delivQty = oi.delivered_qty ?? oi.quantity
+                          const delivQty = order.status === 'delivered' ? (oi.delivered_qty ?? oi.quantity) : oi.delivered_qty
                           return (
                             <tr key={oi.id} className="border-t border-amber-100">
                               <td className="py-1.5 text-gray-700">{oi.bakery_items?.name}</td>
@@ -115,10 +117,10 @@ export default function PastOrders() {
                               <td className={`px-2 py-1.5 text-center ${oi.loaded_qty != null && oi.loaded_qty < (oi.baked_qty ?? oi.quantity) ? 'text-orange-500' : 'text-gray-600'}`}>
                                 {oi.loaded_qty ?? '—'}
                               </td>
-                              <td className={`px-2 py-1.5 text-center font-medium ${delivQty < oi.quantity ? 'text-red-500' : 'text-green-600'}`}>
-                                {delivQty}
+                              <td className={`px-2 py-1.5 text-center font-medium ${delivQty == null ? 'text-gray-300' : delivQty < oi.quantity ? 'text-red-500' : 'text-green-600'}`}>
+                                {delivQty ?? '—'}
                               </td>
-                              <td className="py-1.5 text-right font-mono text-gray-700">₹{(delivQty * oi.unit_price).toFixed(0)}</td>
+                              <td className="py-1.5 text-right font-mono text-gray-700">₹{((delivQty ?? 0) * oi.unit_price).toFixed(0)}</td>
                             </tr>
                           )
                         })}
