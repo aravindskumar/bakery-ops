@@ -136,6 +136,7 @@ export default function Orders() {
 
   async function saveOrder() {
     if (!selectedCustomer) return
+    if (saving) return  // prevent double-tap
     if (activeLines.length === 0) return setError('Add at least one item.')
     if (isFutureOrder && !futureDeliveryDate) return setError('Please set a delivery date.')
     setSaving(true); setError('')
@@ -197,6 +198,7 @@ export default function Orders() {
 
   // Start Baking — sends all drafts to baker, sets delivery date, activates baker view
   async function startBaking() {
+    if (startingBake) return  // prevent double-tap
     const draftOrders = orders.filter(o => o.status === 'draft')
     if (draftOrders.length === 0) return alert('No draft orders to send to baker.')
     const autoDelivery = deliveryDateManual ? deliveryDate : getAutoDeliveryDate()
