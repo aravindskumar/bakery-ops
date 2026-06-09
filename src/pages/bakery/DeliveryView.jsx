@@ -13,7 +13,7 @@ function fmt(d) {
 }
 
 const RETURN_CUSTOMERS = ['Himalayan Tea Stall', 'Krishna General Store', 'UK Shoppe']
-const CAT_ORDER = ['Bread', 'Pastry', 'Dry Cake', 'Wet Cake', 'Cookie', 'Pie', 'Other']
+const CAT_ORDER = ['Bread', 'Bhagsu', 'Panini', 'Hot Dog', 'Cookie', 'Cinnamon Roll', 'Dry Cake', 'Wet Cake', 'French Pastry', 'Other']
 
 export default function DeliveryView({ standalone }) {
   const { signOut } = useAuth()

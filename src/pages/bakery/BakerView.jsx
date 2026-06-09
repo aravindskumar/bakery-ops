@@ -251,7 +251,7 @@ export default function BakerView({ standalone }) {
               if (!categoryMap[cat]) categoryMap[cat] = []
               categoryMap[cat].push(item)
             }
-            const CATEGORY_ORDER = ['Bread', 'Pastry', 'Dry Cake', 'Wet Cake', 'Cookie', 'Pie', 'Other']
+            const CATEGORY_ORDER = ['Bread', 'Bhagsu', 'Panini', 'Hot Dog', 'Cookie', 'Cinnamon Roll', 'Dry Cake', 'Wet Cake', 'French Pastry', 'Other']
             const sortedCats = Object.keys(categoryMap).sort((a, b) => {
               const ai = CATEGORY_ORDER.indexOf(a); const bi = CATEGORY_ORDER.indexOf(b)
               return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi)

@@ -1,21 +1,14 @@
-// ─────────────────────────────────────────────────────────────
-// Bake List Logic
-// Takes a map of { itemName -> qty } and returns structured groups
-// ─────────────────────────────────────────────────────────────
-
 export function buildBakeList(itemQtyMap, cookieSurplusFromYesterday = 0) {
   const get = (name) => itemQtyMap[name] || 0
-
   const groups = []
 
   // ── BREAD ──────────────────────────────────────────────────
   const bigBread = get('Big Bread')
   const smallBread = get('Small Bread')
-  const totalBread = bigBread * 4 + smallBread
   if (bigBread > 0 || smallBread > 0) {
     groups.push({
-      group: 'Total Bread',
-      total: totalBread,
+      group: 'Bread Total',
+      total: bigBread * 4 + smallBread,
       unit: 'small loaf equiv',
       showTotal: true,
       items: [
@@ -26,27 +19,39 @@ export function buildBakeList(itemQtyMap, cookieSurplusFromYesterday = 0) {
   }
 
   // ── BHAGSU CAKE ───────────────────────────────────────────
-  const bhagsuu = get('Bhagsu Cake')
-  if (bhagsuu > 0) groups.push({ group: 'Bhagsu Cake', total: bhagsuu, items: [] })
+  const bhagsu = get('Bhagsu Cake')
+  if (bhagsu > 0) groups.push({ group: 'Bhagsu Cake', total: bhagsu, items: [] })
 
   // ── PANINI ────────────────────────────────────────────────
   const panini = get('Panini')
   if (panini > 0) groups.push({ group: 'Panini', total: panini, items: [] })
+
+  // ── HOT DOG ───────────────────────────────────────────────
+  const burger = get('Burger Bun')
+  const sandwich = get('Sandwich')
+  if (burger > 0 || sandwich > 0) {
+    groups.push({
+      group: 'Hot Dog Total',
+      total: burger + sandwich,
+      showTotal: true,
+      items: [
+        { name: 'Burger Bun', qty: burger },
+        { name: 'Sandwich', qty: sandwich },
+      ].filter(i => i.qty > 0)
+    })
+  }
 
   // ── COOKIES ───────────────────────────────────────────────
   const muesli = get('Muesli Cookie')
   const chocCookie = get('Chocolate Cookie')
   const rawCookieTotal = muesli + chocCookie - cookieSurplusFromYesterday
   const adjustedCookieTotal = Math.max(0, rawCookieTotal)
-  const cookieRounded = adjustedCookieTotal > 0
-    ? Math.ceil(adjustedCookieTotal / 8) * 8
-    : 0
+  const cookieRounded = adjustedCookieTotal > 0 ? Math.ceil(adjustedCookieTotal / 8) * 8 : 0
   const cookieSurplus = cookieRounded - adjustedCookieTotal
   const cookieBatches = cookieRounded / 8
-
   if (muesli > 0 || chocCookie > 0) {
     groups.push({
-      group: 'Cookies',
+      group: 'Cookie Total',
       total: cookieBatches,
       unit: 'batches of 8',
       totalDisplay: `${cookieRounded} (${cookieBatches} batch${cookieBatches !== 1 ? 'es' : ''} of 8)`,
@@ -58,57 +63,29 @@ export function buildBakeList(itemQtyMap, cookieSurplusFromYesterday = 0) {
     })
   }
 
-  // ── BANANA CHOCOLATE CAKE (standalone - moved to grouped section below) ──
-
-
   // ── CINNAMON ROLL ─────────────────────────────────────────
   const cinnamonRoll = get('Cinnamon Roll')
   if (cinnamonRoll > 0) groups.push({ group: 'Cinnamon Roll', total: cinnamonRoll, items: [] })
 
-  // ── HOT DOG ───────────────────────────────────────────────
-  const sandwich = get('Sandwich')
-  const burger = get('Burger Bun')
-  if (sandwich > 0 || burger > 0) {
+  // ── DRY CAKE SECTION ──────────────────────────────────────
+
+  // Carrot Cake Total
+  const carrotBig = get('Carrot Cake Big')
+  const carrotSmall = get('Carrot Cake Small')
+  if (carrotBig > 0 || carrotSmall > 0) {
+    const total = carrotBig + (carrotSmall / 2)
     groups.push({
-      group: 'Total Hot Dog Buns',
-      total: sandwich + burger,
+      group: 'Carrot Cake Total',
+      total, totalDisplay: `${total % 1 === 0 ? total : total.toFixed(1)}`,
       showTotal: true,
       items: [
-        { name: 'Sandwich', qty: sandwich },
-        { name: 'Burger Bun', qty: burger },
+        { name: 'Carrot Cake Big', qty: carrotBig },
+        { name: 'Carrot Cake Small', qty: carrotSmall },
       ].filter(i => i.qty > 0)
     })
   }
 
-  // ── CAKE GROUPS (big + small, grouped for display) ────────
-  const cakeGroups = [
-    { label: 'Carrot Cake', big: 'Carrot Cake Big', small: 'Carrot Cake Small' },
-    { label: 'Banana Cake', big: 'Banana Cake Big', small: 'Banana Cake Small' },
-    { label: 'Vegan Banana Cake', big: 'Vegan Banana Cake Big', small: 'Vegan Banana Cake Small' },
-    { label: 'Oreo Cheesecake', big: 'Oreo Cheesecake Big', small: 'Oreo Cheesecake Small' },
-    { label: 'Mango Cheesecake', big: 'Mango Cheesecake Big', small: 'Mango Cheesecake Small' },
-    { label: 'Blueberry Cheesecake', big: 'Blueberry Cheesecake Big', small: 'Blueberry Cheesecake Small' },
-  ]
-
-  for (const cg of cakeGroups) {
-    const bigQty = get(cg.big)
-    const smallQty = get(cg.small)
-    if (bigQty > 0 || smallQty > 0) {
-      const total = bigQty + (smallQty / 2)
-      groups.push({
-        group: `${cg.label} Total`,
-        total,
-        totalDisplay: `${total % 1 === 0 ? total : total.toFixed(1)}`,
-        showTotal: true,
-        items: [
-          { name: cg.big, qty: bigQty },
-          { name: cg.small, qty: smallQty },
-        ].filter(i => i.qty > 0)
-      })
-    }
-  }
-
-  // ── COMBINED BROWNIE GROUP ────────────────────────────────
+  // Brownie Total (includes White Choc)
   const brownieBig = get('Brownie Big')
   const brownieSmall = get('Brownie Small')
   const wcBig = get('White Chocolate Brownie Big')
@@ -117,8 +94,7 @@ export function buildBakeList(itemQtyMap, cookieSurplusFromYesterday = 0) {
     const total = brownieBig + (brownieSmall / 2) + wcBig + (wcSmall / 2)
     groups.push({
       group: 'Brownie Total',
-      total,
-      totalDisplay: `${total % 1 === 0 ? total : total.toFixed(1)}`,
+      total, totalDisplay: `${total % 1 === 0 ? total : total.toFixed(1)}`,
       showTotal: true,
       items: [
         { name: 'Brownie Big', qty: brownieBig },
@@ -129,15 +105,30 @@ export function buildBakeList(itemQtyMap, cookieSurplusFromYesterday = 0) {
     })
   }
 
-  // ── BANANA CHOCOLATE GROUP ────────────────────────────────
+  // Vegan Banana Cake
+  const veganBig = get('Vegan Banana Cake Big')
+  const veganSmall = get('Vegan Banana Cake Small')
+  if (veganBig > 0 || veganSmall > 0) {
+    const total = veganBig + (veganSmall / 2)
+    groups.push({
+      group: 'Vegan Banana Cake Total',
+      total, totalDisplay: `${total % 1 === 0 ? total : total.toFixed(1)}`,
+      showTotal: true,
+      items: [
+        { name: 'Vegan Banana Cake Big', qty: veganBig },
+        { name: 'Vegan Banana Cake Small', qty: veganSmall },
+      ].filter(i => i.qty > 0)
+    })
+  }
+
+  // Banana Chocolate
   const bananaChocBig = get('Banana Chocolate Big')
   const bananaChocSmall = get('Banana Chocolate Small')
   if (bananaChocBig > 0 || bananaChocSmall > 0) {
     const total = bananaChocBig + (bananaChocSmall / 2)
     groups.push({
       group: 'Banana Chocolate Total',
-      total,
-      totalDisplay: `${total % 1 === 0 ? total : total.toFixed(1)}`,
+      total, totalDisplay: `${total % 1 === 0 ? total : total.toFixed(1)}`,
       showTotal: true,
       items: [
         { name: 'Banana Chocolate Big', qty: bananaChocBig },
@@ -146,42 +137,77 @@ export function buildBakeList(itemQtyMap, cookieSurplusFromYesterday = 0) {
     })
   }
 
-  const standalones = [
-    'Chocolate Cookie', // already in cookies group, skip if grouped
-    'Lotus Biscoff Cheesecake Small',
-    'Banoffee',
-    'Apple Pie',
-    'Bhagsu Cake',
-  ]
-  // Chocolate Cake (standalone)
-  const chocBig = get('Chocolate Cake Big') || get('Chocolate Big')
-  if (chocBig > 0) groups.push({ group: 'Chocolate Big', total: chocBig, items: [] })
-
+  // Chocolate Cake
   const chocCake = get('Chocolate Cake')
   if (chocCake > 0) groups.push({ group: 'Chocolate Cake', total: chocCake, items: [] })
 
-  const biscoff = get('Lotus Biscoff Cheesecake Small')
-  if (biscoff > 0) groups.push({ group: 'Lotus Biscoff Cheesecake', total: biscoff, items: [] })
+  // ── WET CAKE SECTION ──────────────────────────────────────
 
+  // Banoffee
   const banoffee = get('Banoffee')
   if (banoffee > 0) groups.push({ group: 'Banoffee', total: banoffee, items: [] })
 
+  // Blueberry Cheesecake
+  const blueberryBig = get('Blueberry Cheesecake Big')
+  const blueberrySmall = get('Blueberry Cheesecake Small')
+  if (blueberryBig > 0 || blueberrySmall > 0) {
+    const total = blueberryBig + (blueberrySmall / 2)
+    groups.push({
+      group: 'Blueberry Cheesecake Total',
+      total, totalDisplay: `${total % 1 === 0 ? total : total.toFixed(1)}`,
+      showTotal: true,
+      items: [
+        { name: 'Blueberry Cheesecake Big', qty: blueberryBig },
+        { name: 'Blueberry Cheesecake Small', qty: blueberrySmall },
+      ].filter(i => i.qty > 0)
+    })
+  }
+
+  // Mango Cheesecake
+  const mangoBig = get('Mango Cheesecake Big')
+  const mangoSmall = get('Mango Cheesecake Small')
+  if (mangoBig > 0 || mangoSmall > 0) {
+    const total = mangoBig + (mangoSmall / 2)
+    groups.push({
+      group: 'Mango Cheesecake Total',
+      total, totalDisplay: `${total % 1 === 0 ? total : total.toFixed(1)}`,
+      showTotal: true,
+      items: [
+        { name: 'Mango Cheesecake Big', qty: mangoBig },
+        { name: 'Mango Cheesecake Small', qty: mangoSmall },
+      ].filter(i => i.qty > 0)
+    })
+  }
+
+  // Lotus Biscoff
+  const biscoff = get('Lotus Biscoff Cheesecake Small')
+  if (biscoff > 0) groups.push({ group: 'Lotus Biscoff Cheesecake', total: biscoff, items: [] })
+
+  // Oreo Cheesecake
+  const oreoBig = get('Oreo Cheesecake Big')
+  const oreoSmall = get('Oreo Cheesecake Small')
+  if (oreoBig > 0 || oreoSmall > 0) {
+    const total = oreoBig + (oreoSmall / 2)
+    groups.push({
+      group: 'Oreo Cheesecake Total',
+      total, totalDisplay: `${total % 1 === 0 ? total : total.toFixed(1)}`,
+      showTotal: true,
+      items: [
+        { name: 'Oreo Cheesecake Big', qty: oreoBig },
+        { name: 'Oreo Cheesecake Small', qty: oreoSmall },
+      ].filter(i => i.qty > 0)
+    })
+  }
+
+  // Apple Pie
   const applePie = get('Apple Pie')
   if (applePie > 0) groups.push({ group: 'Apple Pie', total: applePie, items: [] })
-
-  // ── MUFFINS ───────────────────────────────────────────────
-  const bananaMuffin = get('Banana Muffin')
-  const chocMuffin = get('Chocolate Muffin')
-  if (bananaMuffin > 0) groups.push({ group: 'Banana Muffin', total: bananaMuffin, items: [] })
-  if (chocMuffin > 0) groups.push({ group: 'Chocolate Muffin', total: chocMuffin, items: [] })
 
   // ── FRENCH PASTRY ─────────────────────────────────────────
   const croissantRaw = get('Croissant')
   const chocCroissantRaw = get('Chocolate Croissant')
   const danishRaw = get('Danish')
   const pastryRawTotal = croissantRaw + chocCroissantRaw + danishRaw
-
-  // Compute alert for admin
   let pastryAlert = null
   if (pastryRawTotal > 0 && pastryRawTotal < 12) {
     pastryAlert = `Total is ${pastryRawTotal} — below minimum of 12. Consider not baking or adding to reach 12.`
@@ -190,7 +216,6 @@ export function buildBakeList(itemQtyMap, cookieSurplusFromYesterday = 0) {
     const upper = lower + 6
     pastryAlert = `Total is ${pastryRawTotal} — not a multiple of 6. Bake ${lower} or ${upper}?`
   }
-
   if (pastryRawTotal > 0) {
     groups.push({
       group: 'French Pastry Total',
