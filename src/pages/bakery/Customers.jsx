@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
 
 const TYPES = ['cafe', 'retail', 'restaurant', 'other']
-const empty = { name: '', contact_name: '', phone: '', address: '', type: 'cafe', has_custom_pricing: false, is_active: true, notes: '', payment_days: 0 }
+const empty = { name: '', contact_name: '', phone: '', address: '', type: 'cafe', has_custom_pricing: false, is_active: true, notes: '', payment_days: 0, route_order: 99, deliveryType: 'pickup', afterCustomer: '' }
 
 export default function Customers() {
   const [customers, setCustomers] = useState([])
@@ -33,9 +33,40 @@ export default function Customers() {
   async function save() {
     if (!form.name) return setError('Customer name is required.')
     setSaving(true); setError('')
+
+    let saveData = { ...form }
+    delete saveData.deliveryType
+    delete saveData.afterCustomer
+
+    if (!editing) {
+      // New customer — handle route order
+      if (form.deliveryType === 'pickup') {
+        saveData.route_order = 99
+      } else {
+        // Delivery — shift existing customers down and insert at correct position
+        let newRouteOrder
+        if (form.afterCustomer === 'start') {
+          newRouteOrder = 1
+        } else {
+          const afterCust = customers.find(c => c.id === form.afterCustomer)
+          newRouteOrder = (afterCust?.route_order || 1) + 1
+        }
+        // Shift all delivery customers at or after newRouteOrder down by 1
+        await supabase.rpc('shift_route_orders', { from_order: newRouteOrder })
+          .catch(async () => {
+            // Fallback if RPC doesn't exist
+            const toShift = customers.filter(c => (c.route_order || 99) >= newRouteOrder && (c.route_order || 99) < 99)
+            for (const c of toShift) {
+              await supabase.from('customers').update({ route_order: c.route_order + 1 }).eq('id', c.id)
+            }
+          })
+        saveData.route_order = newRouteOrder
+      }
+    }
+
     const { error } = editing
-      ? await supabase.from('customers').update(form).eq('id', editing)
-      : await supabase.from('customers').insert(form)
+      ? await supabase.from('customers').update(saveData).eq('id', editing)
+      : await supabase.from('customers').insert(saveData)
     setSaving(false)
     if (error) return setError(error.message)
     setShowForm(false); setForm(empty); setEditing(null)
@@ -203,6 +234,34 @@ export default function Customers() {
                   Active
                 </label>
               </div>
+              {!editing && (
+                <div>
+                  <label className="text-xs font-medium text-gray-500 mb-2 block">Delivery Type</label>
+                  <div className="flex gap-3 mb-3">
+                    <button onClick={() => setForm({...form, deliveryType: 'pickup', route_order: 99})}
+                      className={`flex-1 py-2.5 rounded-xl text-sm font-semibold transition-colors ${form.deliveryType === 'pickup' ? 'bg-amber-800 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
+                      Self Pick-up
+                    </button>
+                    <button onClick={() => setForm({...form, deliveryType: 'delivery', afterCustomer: ''})}
+                      className={`flex-1 py-2.5 rounded-xl text-sm font-semibold transition-colors ${form.deliveryType === 'delivery' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
+                      Delivery Route
+                    </button>
+                  </div>
+                  {form.deliveryType === 'delivery' && (
+                    <div>
+                      <label className="text-xs font-medium text-gray-500 mb-1 block">Position in Route — After</label>
+                      <select value={form.afterCustomer} onChange={e => setForm({...form, afterCustomer: e.target.value})}
+                        className="w-full px-3 py-2.5 rounded-xl border border-blue-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white">
+                        <option value="">Select position...</option>
+                        <option value="start">— Start of route (position 1)</option>
+                        {customers.filter(c => c.route_order && c.route_order < 99 && c.is_active)
+                          .sort((a, b) => a.route_order - b.route_order)
+                          .map(c => <option key={c.id} value={c.id}>After {c.name} (#{c.route_order})</option>)}
+                      </select>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
             {error && <p className="text-red-500 text-sm mt-3">{error}</p>}
             <div className="flex gap-3 mt-6">
