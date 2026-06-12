@@ -67,6 +67,12 @@ export function buildBakeList(itemQtyMap, cookieSurplusFromYesterday = 0) {
   const cinnamonRoll = get('Cinnamon Roll')
   if (cinnamonRoll > 0) groups.push({ group: 'Cinnamon Roll', total: cinnamonRoll, items: [] })
 
+  // ── MUFFINS ───────────────────────────────────────────────
+  const bananaMuffin = get('Banana Muffin')
+  const chocMuffin = get('Chocolate Muffin')
+  if (bananaMuffin > 0) groups.push({ group: 'Banana Muffin', total: bananaMuffin, items: [] })
+  if (chocMuffin > 0) groups.push({ group: 'Chocolate Muffin', total: chocMuffin, items: [] })
+
   // ── DRY CAKE SECTION ──────────────────────────────────────
 
   // Carrot Cake Total
