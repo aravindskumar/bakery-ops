@@ -42,10 +42,15 @@ export default function BakerView({ standalone }) {
 
     const surplusToDeduct = adjustments?.reduce((s, a) => s + a.adjustment_qty, 0) || 0
 
+    // Fetch today AND yesterday — baking often starts before midnight and continues past midnight
+    const yesterday = new Date()
+    yesterday.setDate(yesterday.getDate() - 1)
+    const yesterdayStr = yesterday.toISOString().split('T')[0]
+
     const { data, error } = await supabase
       .from('orders')
       .select('*, order_items(*, bakery_items(id, name, unit, category))')
-      .eq('order_date', today)
+      .in('order_date', [today, yesterdayStr])
       .eq('status', 'sent_to_baker')
       .not('baking_started_at', 'is', null)
 
@@ -251,7 +256,7 @@ export default function BakerView({ standalone }) {
               if (!categoryMap[cat]) categoryMap[cat] = []
               categoryMap[cat].push(item)
             }
-            const CATEGORY_ORDER = ['Bread', 'Bhagsu', 'Panini', 'Hot Dog', 'Cookie', 'Cinnamon Roll', 'Dry Cake', 'Wet Cake', 'French Pastry', 'Other']
+            const CATEGORY_ORDER = ['Bread', 'Pastry', 'Dry Cake', 'Wet Cake', 'Cookie', 'Pie', 'Other']
             const sortedCats = Object.keys(categoryMap).sort((a, b) => {
               const ai = CATEGORY_ORDER.indexOf(a); const bi = CATEGORY_ORDER.indexOf(b)
               return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi)
