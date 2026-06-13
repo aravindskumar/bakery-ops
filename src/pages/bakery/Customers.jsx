@@ -32,6 +32,10 @@ export default function Customers() {
 
   async function save() {
     if (!form.name) return setError('Customer name is required.')
+    if (saving) return
+    if (!editing && form.deliveryType === 'delivery' && !form.afterCustomer) {
+      return setError('Please select a position in the delivery route.')
+    }
     setSaving(true); setError('')
 
     let saveData = { ...form }
@@ -52,14 +56,10 @@ export default function Customers() {
           newRouteOrder = (afterCust?.route_order || 1) + 1
         }
         // Shift all delivery customers at or after newRouteOrder down by 1
-        await supabase.rpc('shift_route_orders', { from_order: newRouteOrder })
-          .catch(async () => {
-            // Fallback if RPC doesn't exist
-            const toShift = customers.filter(c => (c.route_order || 99) >= newRouteOrder && (c.route_order || 99) < 99)
-            for (const c of toShift) {
-              await supabase.from('customers').update({ route_order: c.route_order + 1 }).eq('id', c.id)
-            }
-          })
+        const toShift = customers.filter(c => (c.route_order || 99) >= newRouteOrder && (c.route_order || 99) < 99)
+        for (const c of toShift) {
+          await supabase.from('customers').update({ route_order: c.route_order + 1 }).eq('id', c.id)
+        }
         saveData.route_order = newRouteOrder
       }
     }
