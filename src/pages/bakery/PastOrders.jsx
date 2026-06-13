@@ -20,6 +20,7 @@ export default function PastOrders() {
   })
   const [orders, setOrders] = useState([])
   const [loading, setLoading] = useState(false)
+  const [expandedOrder, setExpandedOrder] = useState(null)
   const [markingDelivered, setMarkingDelivered] = useState({})
 
   async function markDelivered(order) {
