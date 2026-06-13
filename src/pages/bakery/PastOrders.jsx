@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabase'
-
 function getToday() { return new Date().toISOString().split('T')[0] }
 function formatDate(d) {
   if (!d) return '—'
@@ -21,7 +20,23 @@ export default function PastOrders() {
   })
   const [orders, setOrders] = useState([])
   const [loading, setLoading] = useState(false)
-  const [expandedOrder, setExpandedOrder] = useState(null)
+  const [markingDelivered, setMarkingDelivered] = useState({})
+
+  async function markDelivered(order) {
+    setMarkingDelivered(prev => ({ ...prev, [order.id]: true }))
+    await supabase.from('orders').update({ status: 'delivered', delivered_at: new Date().toISOString() }).eq('id', order.id)
+    await supabase.from('order_items')
+      .update({ delivered_qty: null })
+      .eq('order_id', order.id)
+    // Set delivered_qty = quantity for all items
+    for (const oi of order.order_items) {
+      if (oi.delivered_qty == null) {
+        await supabase.from('order_items').update({ delivered_qty: oi.quantity }).eq('id', oi.id)
+      }
+    }
+    setMarkingDelivered(prev => ({ ...prev, [order.id]: false }))
+    fetchOrders(date)
+  }
 
   useEffect(() => { fetchOrders(date) }, [date])
 
@@ -83,11 +98,20 @@ export default function PastOrders() {
                     </div>
                   </div>
                   <div className="ml-3 text-right shrink-0">
-                    <div className="font-mono text-sm font-semibold text-gray-800">₹{deliveredAmt.toFixed(0)}</div>
-                    {deliveredAmt !== orderedAmt && (
+                    <div className="font-mono text-sm font-semibold text-gray-800">₹{deliveredAmt > 0 ? deliveredAmt.toFixed(0) : orderedAmt.toFixed(0)}</div>
+                    {deliveredAmt > 0 && deliveredAmt !== orderedAmt && (
                       <div className="text-xs text-gray-400">ordered ₹{orderedAmt.toFixed(0)}</div>
                     )}
-                    <div className="text-xs text-gray-400 mt-0.5">{isExpanded ? '▲' : '▼'}</div>
+                    <div className="flex items-center gap-2 justify-end mt-1">
+                      {order.status !== 'delivered' && (
+                        <button onClick={e => { e.stopPropagation(); markDelivered(order) }}
+                          disabled={markingDelivered[order.id]}
+                          className="text-xs px-2 py-1 rounded-lg bg-green-600 text-white font-medium hover:bg-green-700 disabled:opacity-50">
+                          {markingDelivered[order.id] ? '...' : '✓ Deliver'}
+                        </button>
+                      )}
+                      <div className="text-xs text-gray-400">{isExpanded ? '▲' : '▼'}</div>
+                    </div>
                   </div>
                 </div>
 
