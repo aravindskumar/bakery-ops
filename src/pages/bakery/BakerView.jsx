@@ -4,7 +4,10 @@ import { supabase } from '../../lib/supabase'
 import { buildBakeList } from '../../lib/bakeList'
 import BakeListDisplay from '../../components/BakeListDisplay'
 
-function getToday() { return new Date().toISOString().split('T')[0] }
+function getToday() {
+  const nowIST = new Date(new Date().getTime() + (5.5 * 60 * 60 * 1000))
+  return nowIST.toISOString().split('T')[0]
+}
 function getTomorrow() {
   const d = new Date(); d.setDate(d.getDate() + 1)
   return d.toISOString().split('T')[0]
@@ -42,12 +45,14 @@ export default function BakerView({ standalone }) {
 
     const surplusToDeduct = adjustments?.reduce((s, a) => s + a.adjustment_qty, 0) || 0
 
-    // Baking cycle: before 11am show today's delivery orders, 11am+ show tomorrow's
-    const hour = new Date().getHours()
+    // Baking cycle: before 11am IST show today's delivery orders, 11am+ show tomorrow's
+    // IST = UTC + 5:30
+    const nowIST = new Date(new Date().getTime() + (5.5 * 60 * 60 * 1000))
+    const hourIST = nowIST.getUTCHours()
     const tomorrow = new Date()
     tomorrow.setDate(tomorrow.getDate() + 1)
     const tomorrowStr = tomorrow.toISOString().split('T')[0]
-    const bakingDeliveryDate = hour < 11 ? today : tomorrowStr
+    const bakingDeliveryDate = hourIST < 11 ? today : tomorrowStr
 
     const { data, error } = await supabase
       .from('orders')
