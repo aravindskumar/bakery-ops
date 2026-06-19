@@ -107,7 +107,9 @@ export default function Ledger() {
       return
     }
 
-    const uninvoiced = orders.filter(o => !o.invoice_id && o.status === 'delivered')
+    const uninvoiced = orders
+      .filter(o => !o.invoice_id && o.status === 'delivered')
+      .sort((a, b) => new Date(a.order_date) - new Date(b.order_date))
     if (uninvoiced.length === 0) return alert('No uninvoiced delivered orders for this customer.')
     if (!confirm(`Generate invoice for ${uninvoiced.length} order(s)?`)) return
     setGenerating(true)
@@ -173,8 +175,9 @@ export default function Ledger() {
   }
 
   function printInvoice(inv, invoiceOrders) {
+    const sortedOrders = [...invoiceOrders].sort((a, b) => new Date(a.order_date) - new Date(b.order_date))
     const rows = []
-    for (const order of invoiceOrders) {
+    for (const order of sortedOrders) {
       for (const oi of order.order_items) {
         rows.push({
           date: order.order_date,
