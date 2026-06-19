@@ -206,6 +206,7 @@ export default function Ledger() {
   <title>Invoice ${inv.invoice_number}</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
+    @page { margin: 0.5in; }
     body { font-family: Arial, sans-serif; font-size: 13px; color: #1a1a1a; padding: 40px; }
     .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 28px; padding-bottom: 20px; border-bottom: 2px solid #fde68a; }
     .bakery-name { font-size: 22px; font-weight: 700; color: #92400e; }
