@@ -54,6 +54,7 @@ export default function Orders() {
   const [advancing, setAdvancing] = useState(null)
   const [startingBake, setStartingBake] = useState(false)
   const [showFutureCustomerPicker, setShowFutureCustomerPicker] = useState(false)
+  const [itemFrequency, setItemFrequency] = useState({}) // bakery_item_id -> order_count
 
   const isToday = viewDate === orderDate
 
@@ -94,11 +95,10 @@ export default function Orders() {
     return cp ? cp.custom_price : standardPrice
   }
 
-  function openNewOrder(customer, future = false) {
+  async function openNewOrder(customer, future = false) {
     setSelectedCustomer(customer)
     setIsFutureOrder(future)
     if (future) {
-      // Default future delivery to 2 days from now
       const d = new Date(); d.setDate(d.getDate() + 2)
       setFutureDeliveryDate(d.toISOString().split('T')[0])
     }
@@ -106,6 +106,14 @@ export default function Orders() {
       bakery_item_id: item.id, name: item.name, unit: item.unit, category: item.category,
       unit_price: getPriceForCustomer(customer, item.id, item.selling_price), quantity: 0
     })))
+    // Fetch item frequency for this customer
+    const { data: freq } = await supabase
+      .from('customer_item_frequency')
+      .select('bakery_item_id, order_count')
+      .eq('customer_id', customer.id)
+    const freqMap = {}
+    if (freq) freq.forEach(f => { freqMap[f.bakery_item_id] = f.order_count })
+    setItemFrequency(freqMap)
     setOrderNotes(''); setEditingOrder(null); setShowForm(true)
   }
 
@@ -576,8 +584,51 @@ export default function Orders() {
             )}
             <p className="text-xs text-gray-400 mb-5">Enter quantities for each item</p>
             <div className="space-y-5 mb-4">
+              {/* Frequently Ordered section */}
+              {(() => {
+                const freqLines = orderLines
+                  .map((l, idx) => ({ ...l, idx }))
+                  .filter(l => (itemFrequency[l.bakery_item_id] || 0) > 0)
+                  .sort((a, b) => (itemFrequency[b.bakery_item_id] || 0) - (itemFrequency[a.bakery_item_id] || 0))
+                const freqIds = new Set(freqLines.map(l => l.bakery_item_id))
+                if (freqLines.length === 0) return null
+                return (
+                  <div>
+                    <p className="text-xs font-semibold text-amber-600 uppercase tracking-wide mb-2">⭐ Frequently Ordered</p>
+                    <div className="space-y-2">
+                      {freqLines.map(({ idx, ...line }) => (
+                        <div key={line.bakery_item_id} className="flex items-center justify-between gap-3">
+                          <div className="flex-1">
+                            <div className="text-sm text-gray-700">{line.name}</div>
+                            <div className="text-xs text-gray-400">₹{parseFloat(line.unit_price).toFixed(2)} / {line.unit}</div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <button onClick={() => updateQty(idx, line.quantity - 1)}
+                              className="w-7 h-7 rounded-lg bg-gray-100 text-gray-600 hover:bg-gray-200 font-medium text-sm flex items-center justify-center">−</button>
+                            <input type="number" min="0" value={line.quantity || ''} placeholder="0"
+                              onChange={e => updateQty(idx, e.target.value)}
+                              className="w-14 text-center px-2 py-1.5 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400" />
+                            <button onClick={() => updateQty(idx, line.quantity + 1)}
+                              className="w-7 h-7 rounded-lg bg-amber-100 text-amber-700 hover:bg-amber-200 font-medium text-sm flex items-center justify-center">+</button>
+                          </div>
+                          <div className="w-16 text-right font-mono text-sm text-gray-600">
+                            {line.quantity > 0 ? `₹${(line.quantity * line.unit_price).toFixed(0)}` : ''}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    {/* Divider before category section */}
+                    <div className="border-t border-gray-100 mt-4"></div>
+                  </div>
+                )
+              })()}
+
+              {/* Remaining items by category (excluding frequently ordered) */}
               {categories.map(cat => {
-                const catLines = orderLines.map((l, idx) => ({...l, idx})).filter(l => l.category === cat)
+                const catLines = orderLines
+                  .map((l, idx) => ({ ...l, idx }))
+                  .filter(l => l.category === cat && (itemFrequency[l.bakery_item_id] || 0) === 0)
+                if (catLines.length === 0) return null
                 return (
                   <div key={cat}>
                     <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">{cat}</p>
