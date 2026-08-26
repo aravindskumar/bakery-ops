@@ -3,26 +3,25 @@ import { supabase } from '../../lib/supabase'
 import { buildBakeList } from '../../lib/bakeList'
 import BakeListDisplay from '../../components/BakeListDisplay'
 
-function getTomorrow() {
-  const d = new Date()
-  d.setDate(d.getDate() + 1)
-  return d.toISOString().split('T')[0]
+function getISTDate(offsetDays = 0) {
+  const nowIST = new Date(new Date().getTime() + (5.5 * 60 * 60 * 1000))
+  nowIST.setUTCDate(nowIST.getUTCDate() + offsetDays)
+  return nowIST.toISOString().split('T')[0]
 }
 
-function getToday() {
-  return new Date().toISOString().split('T')[0]
-}
+function getTomorrow() { return getISTDate(1) }
+function getToday() { return getISTDate(0) }
 
 function formatDate(dateStr) {
   return new Date(dateStr + 'T00:00:00').toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
 }
 
-// Auto delivery date: same day if 12am-3am, next day otherwise
+// Auto delivery date: same day if 12am-3am IST, next day otherwise
 function getAutoDeliveryDate() {
-  const now = new Date()
-  const hour = now.getHours()
-  if (hour >= 0 && hour < 3) return getToday()
-  return getTomorrow()
+  const nowIST = new Date(new Date().getTime() + (5.5 * 60 * 60 * 1000))
+  const hourIST = nowIST.getUTCHours()
+  if (hourIST >= 0 && hourIST < 3) return getISTDate(0)
+  return getISTDate(1)
 }
 
 const STATUS_CONFIG = {
