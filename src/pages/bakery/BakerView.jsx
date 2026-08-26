@@ -45,19 +45,20 @@ export default function BakerView({ standalone }) {
 
     const surplusToDeduct = adjustments?.reduce((s, a) => s + a.adjustment_qty, 0) || 0
 
-    // Baking cycle: before 11am IST show today's delivery orders, 11am+ show tomorrow's
-    // IST = UTC + 5:30
+    // Baking cycle: before 11am IST show today AND tomorrow delivery orders
+    // After 11am IST show only tomorrow's delivery orders (today's baking is done)
     const nowIST = new Date(new Date().getTime() + (5.5 * 60 * 60 * 1000))
     const hourIST = nowIST.getUTCHours()
     const tomorrow = new Date()
     tomorrow.setDate(tomorrow.getDate() + 1)
     const tomorrowStr = tomorrow.toISOString().split('T')[0]
-    const bakingDeliveryDate = hourIST < 11 ? today : tomorrowStr
+
+    const deliveryDates = hourIST < 11 ? [today, tomorrowStr] : [tomorrowStr]
 
     const { data, error } = await supabase
       .from('orders')
       .select('*, order_items(*, bakery_items(id, name, unit, category))')
-      .eq('delivery_date', bakingDeliveryDate)
+      .in('delivery_date', deliveryDates)
       .eq('status', 'sent_to_baker')
       .not('baking_started_at', 'is', null)
 
